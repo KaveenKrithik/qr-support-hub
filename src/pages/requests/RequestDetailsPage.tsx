@@ -1,0 +1,601 @@
+
+import { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { useAuth } from "@/context/AuthContext";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { ArrowLeft, Clock, Paperclip, Send, User, Star, CheckCircle, XCircle, AlertCircle, MessageCircle } from "lucide-react";
+
+type RequestStatus = "pending" | "active" | "resolved" | "escalated";
+
+type Request = {
+  id: string;
+  title: string;
+  content: string;
+  department: string;
+  status: RequestStatus;
+  student: {
+    id: string;
+    name: string;
+    department: string;
+  };
+  assignedTo?: {
+    id: string;
+    name: string;
+    department: string;
+  };
+  responses: {
+    id: string;
+    text: string;
+    sender: {
+      id: string;
+      name: string;
+      role: "student" | "admin" | "superadmin";
+    };
+    timestamp: Date;
+  }[];
+  createdAt: Date;
+  updatedAt: Date;
+  attachments?: {
+    id: string;
+    name: string;
+    type: string;
+  }[];
+};
+
+const RequestDetailsPage = () => {
+  const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  
+  const [request, setRequest] = useState<Request | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [responseText, setResponseText] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [ratingDialog, setRatingDialog] = useState(false);
+  const [rating, setRating] = useState<number>(0);
+  const [ratingComment, setRatingComment] = useState("");
+  const [isRating, setIsRating] = useState(false);
+  
+  // Mock fetch request data
+  useEffect(() => {
+    // This would be replaced with a real API call
+    setTimeout(() => {
+      if (id === "req1" || !id) {
+        const mockRequest: Request = {
+          id: "req1",
+          title: "Attendance correction request",
+          content: "I need to correct my attendance for CS101 on May 5th. I was present but marked absent.",
+          department: "Computer Science",
+          status: "active",
+          student: {
+            id: "stud1",
+            name: "Rahul Sharma",
+            department: "Computer Science"
+          },
+          assignedTo: {
+            id: "admin1",
+            name: "Dr. John Smith",
+            department: "Computer Science"
+          },
+          responses: [
+            {
+              id: "resp1",
+              text: "Thank you for your request. I'll check the attendance records and get back to you.",
+              sender: {
+                id: "admin1",
+                name: "Dr. John Smith",
+                role: "admin"
+              },
+              timestamp: new Date(2025, 3, 8, 14, 30)
+            },
+            {
+              id: "resp2",
+              text: "I've verified that you were present. Can you please confirm which session you were marked absent for?",
+              sender: {
+                id: "admin1",
+                name: "Dr. John Smith",
+                role: "admin"
+              },
+              timestamp: new Date(2025, 3, 8, 15, 45)
+            },
+            {
+              id: "resp3",
+              text: "It was the morning session from 9:00 AM to 10:30 AM.",
+              sender: {
+                id: "stud1",
+                name: "Rahul Sharma",
+                role: "student"
+              },
+              timestamp: new Date(2025, 3, 8, 16, 10)
+            }
+          ],
+          createdAt: new Date(2025, 3, 8, 10, 15),
+          updatedAt: new Date(2025, 3, 8, 16, 10),
+          attachments: [
+            {
+              id: "att1",
+              name: "attendance_screenshot.png",
+              type: "image/png"
+            }
+          ]
+        };
+        
+        setRequest(mockRequest);
+      } else {
+        // Navigate to 404 if request not found
+        navigate("/not-found");
+      }
+      
+      setLoading(false);
+    }, 1000);
+  }, [id, navigate]);
+  
+  const handleSubmitResponse = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!responseText.trim()) {
+      toast({
+        title: "Empty response",
+        description: "Please enter a response",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setIsSubmitting(true);
+    
+    // This would be replaced with a real API call
+    setTimeout(() => {
+      if (request) {
+        const newResponse = {
+          id: `resp${Math.random().toString(36).substr(2, 9)}`,
+          text: responseText,
+          sender: {
+            id: user?.id || "unknown",
+            name: user?.name || "Unknown User",
+            role: user?.role || "student"
+          },
+          timestamp: new Date()
+        };
+        
+        const updatedRequest = {
+          ...request,
+          responses: [...request.responses, newResponse],
+          updatedAt: new Date()
+        };
+        
+        setRequest(updatedRequest);
+        setResponseText("");
+        setIsSubmitting(false);
+        
+        toast({
+          title: "Response sent",
+          description: "Your response has been added successfully.",
+        });
+      }
+    }, 1000);
+  };
+  
+  const handleResolveRequest = (resolved: boolean) => {
+    if (!request) return;
+    
+    const newStatus: RequestStatus = resolved ? "resolved" : "escalated";
+    
+    // This would be replaced with a real API call
+    setRequest({
+      ...request,
+      status: newStatus,
+      updatedAt: new Date()
+    });
+    
+    if (resolved) {
+      setRatingDialog(true);
+    } else {
+      toast({
+        title: "Request escalated",
+        description: "This request has been escalated for further attention.",
+      });
+    }
+  };
+  
+  const handleSubmitRating = () => {
+    if (rating === 0) {
+      toast({
+        title: "Rating required",
+        description: "Please select a star rating",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setIsRating(true);
+    
+    // This would be replaced with a real API call
+    setTimeout(() => {
+      setIsRating(false);
+      setRatingDialog(false);
+      
+      toast({
+        title: "Rating submitted",
+        description: "Thank you for your feedback!",
+      });
+      
+      // Navigate back to dashboard
+      navigate("/dashboard/student");
+    }, 1000);
+  };
+  
+  const getStatusIcon = (status: RequestStatus) => {
+    switch (status) {
+      case "pending":
+        return <Clock className="h-5 w-5" />;
+      case "active":
+        return <MessageCircle className="h-5 w-5" />;
+      case "resolved":
+        return <CheckCircle className="h-5 w-5" />;
+      case "escalated":
+        return <AlertCircle className="h-5 w-5" />;
+      default:
+        return <Clock className="h-5 w-5" />;
+    }
+  };
+  
+  const getStatusBadge = (status: RequestStatus) => {
+    switch (status) {
+      case "pending":
+        return <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200">Pending</Badge>;
+      case "active":
+        return <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-200">Active</Badge>;
+      case "resolved":
+        return <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">Resolved</Badge>;
+      case "escalated":
+        return <Badge variant="outline" className="bg-red-100 text-red-800 border-red-200">Escalated</Badge>;
+      default:
+        return <Badge variant="outline">Unknown</Badge>;
+    }
+  };
+  
+  const canSubmitResponse = () => {
+    if (!user || !request) return false;
+    if (request.status === "resolved") return false;
+    
+    if (user.role === "student") {
+      return true; // Students can always respond
+    }
+    
+    if (user.role === "admin" && request.assignedTo?.id === user.id) {
+      return true; // Assigned admin can respond
+    }
+    
+    if (user.role === "superadmin") {
+      return true; // Superadmins can always respond
+    }
+    
+    return false;
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-[50vh]">
+        <div className="text-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto"></div>
+          <p className="mt-2">Loading request details...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  if (!request) {
+    return (
+      <div className="flex items-center justify-center h-[50vh]">
+        <div className="text-center">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto" />
+          <h2 className="text-xl font-bold mt-2">Request Not Found</h2>
+          <p className="text-muted-foreground mt-1">The request you're looking for doesn't exist.</p>
+          <Button className="mt-4" onClick={() => navigate(-1)}>
+            Go Back
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+          <ArrowLeft className="h-5 w-5" />
+          <span className="sr-only">Back</span>
+        </Button>
+        <h1 className="text-2xl font-bold">Request Details</h1>
+      </div>
+      
+      <Card>
+        <CardHeader className="flex flex-row items-start justify-between space-y-0">
+          <div>
+            <CardTitle className="text-xl">{request.title}</CardTitle>
+            <div className="flex items-center flex-wrap gap-2 mt-2">
+              <div className="flex items-center gap-1">
+                {getStatusIcon(request.status)}
+                <span className="font-medium">{request.status.charAt(0).toUpperCase() + request.status.slice(1)}</span>
+              </div>
+              <Badge variant="outline">{request.department}</Badge>
+              <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                <Clock className="h-4 w-4" />
+                <span>
+                  {new Date(request.createdAt).toLocaleDateString()} at{" "}
+                  {new Date(request.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            </div>
+          </div>
+          {getStatusBadge(request.status)}
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-6">
+            {/* Request details */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Avatar className="h-8 w-8">
+                  <AvatarFallback className="bg-blue-100 text-blue-800">
+                    {request.student.name.substring(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="font-medium">{request.student.name}</p>
+                  <p className="text-sm text-muted-foreground">{request.student.department}</p>
+                </div>
+              </div>
+              <div className="bg-muted p-4 rounded-md mt-2">
+                <p>{request.content}</p>
+                {request.attachments && request.attachments.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-sm font-medium text-muted-foreground mb-2">Attachments:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {request.attachments.map((attachment) => (
+                        <div 
+                          key={attachment.id} 
+                          className="flex items-center gap-1 border rounded-md px-2 py-1 text-sm"
+                        >
+                          <Paperclip className="h-3 w-3" />
+                          <span>{attachment.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {request.assignedTo && (
+              <div className="flex items-center gap-2 border-t border-b py-4">
+                <User className="h-5 w-5 text-muted-foreground" />
+                <span className="text-muted-foreground">
+                  Assigned to:{" "}
+                  <span className="font-medium text-foreground">
+                    {request.assignedTo.name}
+                  </span>
+                  {" "}({request.assignedTo.department})
+                </span>
+              </div>
+            )}
+            
+            {/* Response thread */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Conversation</h3>
+              
+              {request.responses.map((response) => (
+                <div
+                  key={response.id}
+                  className={`flex gap-3 ${
+                    response.sender.role === "student"
+                      ? "justify-end"
+                      : "justify-start"
+                  }`}
+                >
+                  {response.sender.role !== "student" && (
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback>
+                        {response.sender.name.substring(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                  )}
+                  
+                  <div
+                    className={`space-y-1 max-w-[80%] ${
+                      response.sender.role === "student"
+                        ? "items-end"
+                        : "items-start"
+                    }`}
+                  >
+                    <div
+                      className={`rounded-lg p-3 ${
+                        response.sender.role === "student"
+                          ? "bg-srmblue text-white"
+                          : "bg-muted"
+                      }`}
+                    >
+                      <p>{response.text}</p>
+                    </div>
+                    <div
+                      className={`flex items-center gap-1 text-xs text-muted-foreground ${
+                        response.sender.role === "student" ? "justify-end" : ""
+                      }`}
+                    >
+                      <span>
+                        {response.sender.role === "student" ? "You" : response.sender.name}
+                      </span>
+                      <span>•</span>
+                      <span>
+                        {new Date(response.timestamp).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {response.sender.role === "student" && (
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback className="bg-blue-100 text-blue-800">
+                        {response.sender.name.substring(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                  )}
+                </div>
+              ))}
+              
+              {/* Response input */}
+              {request.status !== "resolved" && (
+                <form onSubmit={handleSubmitResponse} className="space-y-2 mt-6">
+                  <Textarea
+                    placeholder="Type your response..."
+                    value={responseText}
+                    onChange={(e) => setResponseText(e.target.value)}
+                    className={canSubmitResponse() ? "" : "opacity-50"}
+                    disabled={!canSubmitResponse()}
+                  />
+                  <div className="flex justify-between">
+                    <Button variant="outline" type="button">
+                      <Paperclip className="mr-2 h-4 w-4" />
+                      Attach
+                    </Button>
+                    <Button type="submit" disabled={isSubmitting || !canSubmitResponse()}>
+                      {isSubmitting ? (
+                        <>
+                          <svg
+                            className="mr-2 h-4 w-4 animate-spin"
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                          </svg>
+                          Sending...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="mr-2 h-4 w-4" />
+                          Send
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </div>
+            
+            {/* Resolution actions for students */}
+            {user?.role === "student" && request.status === "active" && (
+              <div className="border-t pt-4 mt-6">
+                <p className="font-medium mb-3">Has your issue been resolved?</p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1 bg-green-100 text-green-800 border-green-200 hover:bg-green-200 hover:text-green-900"
+                    onClick={() => handleResolveRequest(true)}
+                  >
+                    <CheckCircle className="mr-2 h-4 w-4" /> Yes, Resolved
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex-1 bg-red-100 text-red-800 border-red-200 hover:bg-red-200 hover:text-red-900"
+                    onClick={() => handleResolveRequest(false)}
+                  >
+                    <XCircle className="mr-2 h-4 w-4" /> Not Resolved
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+      
+      <Dialog open={ratingDialog} onOpenChange={setRatingDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rate Your Experience</DialogTitle>
+            <DialogDescription>
+              Please rate the support you received for this request.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="flex justify-center">
+              <div className="flex gap-1">
+                {[1, 2, 3, 4, 5].map((value) => (
+                  <Button
+                    key={value}
+                    variant="ghost"
+                    size="icon"
+                    className="h-12 w-12"
+                    onClick={() => setRating(value)}
+                  >
+                    <Star
+                      className={`h-8 w-8 ${value <= rating ? "text-srmaccent" : "text-muted-foreground"}`}
+                      fill={value <= rating ? "#FF9F1C" : "none"}
+                    />
+                    <span className="sr-only">{value} star</span>
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="comment">Comment (Optional)</Label>
+              <Textarea
+                id="comment"
+                placeholder="Share your experience..."
+                value={ratingComment}
+                onChange={(e) => setRatingComment(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRatingDialog(false)}>
+              Skip
+            </Button>
+            <Button onClick={handleSubmitRating} disabled={isRating || rating === 0}>
+              {isRating ? (
+                <>
+                  <svg
+                    className="mr-2 h-4 w-4 animate-spin"
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                  </svg>
+                  Submitting...
+                </>
+              ) : (
+                "Submit Rating"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+export default RequestDetailsPage;
