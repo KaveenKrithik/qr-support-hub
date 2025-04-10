@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { useNavigate } from "react-router-dom";
 import { User, Filter, Search, Activity, CheckCircle, Clock, Files, AlertCircle, MessageCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useSupabaseAuth"; // Added the import for useAuth
 
 interface DashboardStats {
   total: number;

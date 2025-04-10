@@ -1,8 +1,7 @@
-
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/hooks/useSupabaseAuth"; // Updated import path
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
