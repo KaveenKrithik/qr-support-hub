@@ -1,4 +1,3 @@
-
 import { useState, useEffect, createContext, useContext } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Session, User } from '@supabase/supabase-js';
@@ -22,6 +21,56 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<Profile | null>(null);
 
+  // Helper function to fetch or create user profile
+  const fetchOrCreateProfile = async (authUser: User, userData?: { name?: string }) => {
+    try {
+      // First, try to get the existing profile
+      const { data: existingProfile, error: fetchError } = await supabase
+        .from('profiles')
+        .select('*, departments:department_id (name)')
+        .eq('id', authUser.id)
+        .maybeSingle(); // Use maybeSingle instead of single to avoid errors when no profile exists
+      
+      // If profile exists, use it
+      if (existingProfile) {
+        const profileData: Profile = {
+          ...existingProfile,
+          department: existingProfile.departments?.name
+        };
+        setUser(profileData);
+        return;
+      }
+      
+      // If no profile exists, create one
+      if (!existingProfile) {
+        // Create a new profile using available information
+        const newProfile = {
+          id: authUser.id,
+          email: authUser.email || '',
+          name: userData?.name || authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
+          role: 'student' as const, // Default role
+          created_at: new Date().toISOString()
+        };
+        
+        const { data: createdProfile, error: createError } = await supabase
+          .from('profiles')
+          .insert(newProfile)
+          .select('*')
+          .single();
+        
+        if (createError) {
+          console.error('Error creating new user profile:', createError);
+          setUser(null);
+        } else if (createdProfile) {
+          setUser(createdProfile as Profile);
+        }
+      }
+    } catch (error) {
+      console.error('Error in profile fetch/create:', error);
+      setUser(null);
+    }
+  };
+
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -30,27 +79,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         
         if (session?.user) {
           setTimeout(async () => {
-            try {
-              const { data, error } = await supabase
-                .from('profiles')
-                .select('*, departments:department_id (name)')
-                .eq('id', session.user.id)
-                .single();
-              
-              if (error) {
-                console.error('Error fetching user profile:', error);
-                setUser(null);
-              } else if (data) {
-                // Transform the data to include department name directly
-                const profileData: Profile = {
-                  ...data,
-                  department: data.departments?.name
-                };
-                setUser(profileData);
-              }
-            } catch (error) {
-              console.error('Error in profile fetch:', error);
-            }
+            await fetchOrCreateProfile(session.user);
           }, 0);
         } else {
           setUser(null);
@@ -59,39 +88,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       
       if (session?.user) {
-        // Fetch user profile
-        setTimeout(async () => {
-          try {
-            const { data, error } = await supabase
-              .from('profiles')
-              .select('*, departments:department_id (name)')
-              .eq('id', session.user.id)
-              .single();
-            
-            if (error) {
-              console.error('Error fetching user profile:', error);
-              setUser(null);
-            } else if (data) {
-              // Transform the data to include department name directly
-              const profileData: Profile = {
-                ...data,
-                department: data.departments?.name
-              };
-              setUser(profileData);
-            }
-          } catch (error) {
-            console.error('Error in profile fetch:', error);
-          } finally {
-            setIsLoading(false);
-          }
-        }, 0);
-      } else {
-        setIsLoading(false);
+        await fetchOrCreateProfile(session.user);
       }
+      
+      setIsLoading(false);
     });
 
     return () => {
@@ -124,12 +128,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         description: "Check your email for the login link"
       });
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error signing in:', error);
       toast({
         variant: "destructive",
         title: "Error signing in",
-        description: error.message
+        description: error instanceof Error ? error.message : 'An unknown error occurred'
       });
       throw error;
     }
@@ -159,12 +163,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         description: "Please check your email for the login link"
       });
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error signing up:', error);
       toast({
         variant: "destructive",
         title: "Error signing up",
-        description: error.message
+        description: error instanceof Error ? error.message : 'An unknown error occurred'
       });
       throw error;
     }
@@ -178,12 +182,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         title: "Signed out",
         description: "You have been logged out successfully"
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error signing out:', error);
       toast({
         variant: "destructive",
         title: "Error signing out",
-        description: error.message
+        description: error instanceof Error ? error.message : 'An unknown error occurred'
       });
       throw error;
     }
@@ -208,12 +212,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         description: "Your profile has been updated successfully"
       });
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error updating profile:', error);
       toast({
         variant: "destructive",
         title: "Error updating profile",
-        description: error.message
+        description: error instanceof Error ? error.message : 'An unknown error occurred'
       });
       throw error;
     }

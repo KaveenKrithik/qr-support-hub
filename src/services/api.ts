@@ -1,10 +1,9 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Department, Request, Profile, Message, Rating, RequestStatus } from "@/types";
 import { Json } from "@/integrations/supabase/types";
 
 // Helper function to convert JSON to typed array
-const parseJsonArray = (json: Json | null): any[] => {
+const parseJsonArray = (json: Json | null): unknown[] => {
   if (!json) return [];
   if (typeof json === 'string') {
     try {
@@ -72,7 +71,7 @@ export const fetchUserProfile = async (userId: string): Promise<Profile | null> 
       )
     `)
     .eq('id', userId)
-    .single();
+    .maybeSingle(); // Use maybeSingle instead of single to avoid the 406 error
   
   if (error) {
     console.error(`Error fetching profile ${userId}:`, error);
