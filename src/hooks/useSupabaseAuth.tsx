@@ -3,13 +3,15 @@ import { useState, useEffect, createContext, useContext } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Session, User } from '@supabase/supabase-js';
 import { Profile } from '@/types';
+import { toast } from '@/components/ui/use-toast';
 
 type AuthContextType = {
   isAuthenticated: boolean;
   user: Profile | null;
   isLoading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, name: string) => Promise<void>;
+  signIn: (email: string) => Promise<void>;
+  signUp: (email: string, name: string) => Promise<void>;
+  verifyOTP: (email: string, token: string) => Promise<void>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<void>;
 };
@@ -28,32 +30,32 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setSession(session);
         
         if (session?.user) {
-          try {
-            const { data, error } = await supabase
-              .from('profiles')
-              .select('*, departments:department_id (name)')
-              .eq('id', session.user.id)
-              .single();
-            
-            if (error) {
-              console.error('Error fetching user profile:', error);
-              setUser(null);
-            } else if (data) {
-              // Transform the data to include department name directly
-              const profileData: Profile = {
-                ...data,
-                department: data.departments?.name
-              };
-              setUser(profileData);
+          setTimeout(async () => {
+            try {
+              const { data, error } = await supabase
+                .from('profiles')
+                .select('*, departments:department_id (name)')
+                .eq('id', session.user.id)
+                .single();
+              
+              if (error) {
+                console.error('Error fetching user profile:', error);
+                setUser(null);
+              } else if (data) {
+                // Transform the data to include department name directly
+                const profileData: Profile = {
+                  ...data,
+                  department: data.departments?.name
+                };
+                setUser(profileData);
+              }
+            } catch (error) {
+              console.error('Error in profile fetch:', error);
             }
-          } catch (error) {
-            console.error('Error in profile fetch:', error);
-          }
+          }, 0);
         } else {
           setUser(null);
         }
-        
-        setIsLoading(false);
       }
     );
 
@@ -98,27 +100,81 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
   }, []);
 
-  const signIn = async (email: string, password: string) => {
+  const validateSrmEmail = (email: string): boolean => {
+    return email.endsWith('@srmist.edu.in');
+  };
+
+  const signIn = async (email: string) => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      if (!validateSrmEmail(email)) {
+        throw new Error('Only SRM Institute emails (@srmist.edu.in) are allowed');
+      }
+
+      const { error } = await supabase.auth.signInWithOtp({
         email,
-        password
+        options: {
+          emailRedirectTo: window.location.origin
+        }
       });
       
       if (error) throw error;
       
-    } catch (error) {
+      toast({
+        title: "Magic link sent",
+        description: "Check your email for the login link"
+      });
+      
+    } catch (error: any) {
       console.error('Error signing in:', error);
+      toast({
+        variant: "destructive",
+        title: "Error signing in",
+        description: error.message
+      });
       throw error;
     }
   };
 
-  const signUp = async (email: string, password: string, name: string) => {
+  const verifyOTP = async (email: string, token: string) => {
     try {
-      const { error } = await supabase.auth.signUp({
+      if (!validateSrmEmail(email)) {
+        throw new Error('Only SRM Institute emails (@srmist.edu.in) are allowed');
+      }
+
+      const { error } = await supabase.auth.verifyOtp({
         email,
-        password,
+        token,
+        type: 'email'
+      });
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Login successful",
+        description: "You have been logged in successfully"
+      });
+      
+    } catch (error: any) {
+      console.error('Error verifying OTP:', error);
+      toast({
+        variant: "destructive",
+        title: "Error verifying OTP",
+        description: error.message
+      });
+      throw error;
+    }
+  };
+
+  const signUp = async (email: string, name: string) => {
+    try {
+      if (!validateSrmEmail(email)) {
+        throw new Error('Only SRM Institute emails (@srmist.edu.in) are allowed');
+      }
+
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
         options: {
+          emailRedirectTo: window.location.origin,
           data: {
             name
           }
@@ -126,9 +182,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       });
       
       if (error) throw error;
+
+      toast({
+        title: "Verification email sent",
+        description: "Please check your email for the verification link"
+      });
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error signing up:', error);
+      toast({
+        variant: "destructive",
+        title: "Error signing up",
+        description: error.message
+      });
       throw error;
     }
   };
@@ -137,8 +203,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
-    } catch (error) {
+      toast({
+        title: "Signed out",
+        description: "You have been logged out successfully"
+      });
+    } catch (error: any) {
       console.error('Error signing out:', error);
+      toast({
+        variant: "destructive",
+        title: "Error signing out",
+        description: error.message
+      });
       throw error;
     }
   };
@@ -156,9 +231,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       // Update local state
       setUser(prev => prev ? { ...prev, ...updates } : null);
+
+      toast({
+        title: "Profile updated",
+        description: "Your profile has been updated successfully"
+      });
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating profile:', error);
+      toast({
+        variant: "destructive",
+        title: "Error updating profile",
+        description: error.message
+      });
       throw error;
     }
   };
@@ -171,6 +256,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         isLoading,
         signIn,
         signUp,
+        verifyOTP,
         signOut,
         updateProfile,
       }}

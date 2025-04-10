@@ -19,8 +19,10 @@ export type Request = {
   department?: string; // For display purposes
   status: RequestStatus;
   media?: any[];
-  created_at: Date | string;
-  updated_at: Date | string;
+  created_at: string;
+  updated_at: string;
+  sender_name?: string;
+  receiver_name?: string;
 };
 
 export type Message = {
@@ -29,8 +31,9 @@ export type Message = {
   sender_id: string;
   content: string;
   attachments?: any[];
-  created_at: Date | string;
-  read_at?: Date | string;
+  created_at: string;
+  read_at?: string;
+  sender_name?: string;
 };
 
 export type Rating = {
@@ -40,7 +43,7 @@ export type Rating = {
   rated_user_id: string;
   stars: number;
   comment?: string;
-  created_at?: Date | string;
+  created_at?: string;
 };
 
 export type Profile = {

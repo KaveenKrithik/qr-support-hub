@@ -9,63 +9,78 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft } from "lucide-react";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 
 const LoginPage = () => {
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, verifyOTP } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("login");
-  
+  const [showOtpInput, setShowOtpInput] = useState(false);
+
+  // Login states
   const [loginEmail, setLoginEmail] = useState("");
-  const [loginPassword, setLoginPassword] = useState("");
+  const [loginOtp, setLoginOtp] = useState("");
   
+  // Signup states
   const [signupEmail, setSignupEmail] = useState("");
-  const [signupPassword, setSignupPassword] = useState("");
   const [signupName, setSignupName] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!loginEmail.trim() || !loginPassword) {
+    if (!loginEmail.trim()) {
       toast({
         title: "Invalid input",
-        description: "Please fill in all required fields.",
+        description: "Please enter your email address.",
         variant: "destructive",
       });
       return;
     }
     
-    setIsLoading(true);
-    
-    try {
-      await signIn(loginEmail, loginPassword);
+    if (showOtpInput) {
+      // Verify OTP
+      if (!loginOtp || loginOtp.length < 6) {
+        toast({
+          title: "Invalid OTP",
+          description: "Please enter the complete OTP sent to your email.",
+          variant: "destructive",
+        });
+        return;
+      }
       
-      toast({
-        title: "Login successful",
-        description: "Welcome back!",
-      });
+      setIsLoading(true);
       
-      // Redirect to dashboard
-      navigate("/dashboard/student");
+      try {
+        await verifyOTP(loginEmail, loginOtp);
+        navigate("/dashboard");
+      } catch (error) {
+        // Error toast is handled in the auth context
+      } finally {
+        setIsLoading(false);
+      }
       
-    } catch (error: any) {
-      toast({
-        title: "Login failed",
-        description: error.message || "An error occurred while trying to log in.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
+    } else {
+      // Send magic link/OTP
+      setIsLoading(true);
+      
+      try {
+        await signIn(loginEmail);
+        setShowOtpInput(true);
+      } catch (error) {
+        // Error toast is handled in the auth context
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
   
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!signupEmail.trim() || !signupPassword || !signupName.trim()) {
+    if (!signupEmail.trim() || !signupName.trim()) {
       toast({
         title: "Invalid input",
         description: "Please fill in all required fields.",
@@ -74,19 +89,10 @@ const LoginPage = () => {
       return;
     }
     
-    if (signupPassword !== confirmPassword) {
+    if (!signupEmail.endsWith('@srmist.edu.in')) {
       toast({
-        title: "Passwords don't match",
-        description: "Please ensure that your passwords match.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    if (signupPassword.length < 6) {
-      toast({
-        title: "Password too short",
-        description: "Password should be at least 6 characters long.",
+        title: "Invalid email",
+        description: "Only SRM Institute emails (@srmist.edu.in) are allowed.",
         variant: "destructive",
       });
       return;
@@ -95,25 +101,26 @@ const LoginPage = () => {
     setIsLoading(true);
     
     try {
-      await signUp(signupEmail, signupPassword, signupName);
+      await signUp(signupEmail, signupName);
       
       toast({
-        title: "Registration successful",
-        description: "Your account has been created successfully. You can now log in.",
+        title: "Registration initiated",
+        description: "Please check your email for verification link.",
       });
       
       // Switch to login tab
       setActiveTab("login");
       
-    } catch (error: any) {
-      toast({
-        title: "Registration failed",
-        description: error.message || "An error occurred while creating your account.",
-        variant: "destructive",
-      });
+    } catch (error) {
+      // Error toast is handled in the auth context
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const resetOtpProcess = () => {
+    setShowOtpInput(false);
+    setLoginOtp("");
   };
 
   return (
@@ -143,33 +150,52 @@ const LoginPage = () => {
               
               <TabsContent value="login">
                 <form onSubmit={handleLogin} className="space-y-4 mt-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="login-email">Email</Label>
-                    <Input
-                      id="login-email"
-                      type="email"
-                      placeholder="your.email@example.com"
-                      value={loginEmail}
-                      onChange={(e) => setLoginEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="login-password">Password</Label>
-                      <Link to="/forgot-password" className="text-sm text-blue-600 hover:underline">
-                        Forgot password?
-                      </Link>
+                  {!showOtpInput ? (
+                    <div className="space-y-2">
+                      <Label htmlFor="login-email">Email (must be @srmist.edu.in)</Label>
+                      <Input
+                        id="login-email"
+                        type="email"
+                        placeholder="your.email@srmist.edu.in"
+                        value={loginEmail}
+                        onChange={(e) => setLoginEmail(e.target.value)}
+                        required
+                      />
                     </div>
-                    <Input
-                      id="login-password"
-                      type="password"
-                      value={loginPassword}
-                      onChange={(e) => setLoginPassword(e.target.value)}
-                      required
-                    />
-                  </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="text-center mb-4">
+                        <p className="text-sm text-muted-foreground">
+                          Enter the OTP sent to {loginEmail}
+                        </p>
+                        <Button 
+                          variant="link" 
+                          type="button" 
+                          className="p-0 h-auto" 
+                          onClick={resetOtpProcess}
+                        >
+                          Change email
+                        </Button>
+                      </div>
+                      
+                      <div className="flex justify-center">
+                        <InputOTP 
+                          maxLength={6} 
+                          value={loginOtp} 
+                          onChange={setLoginOtp}
+                        >
+                          <InputOTPGroup>
+                            <InputOTPSlot index={0} />
+                            <InputOTPSlot index={1} />
+                            <InputOTPSlot index={2} />
+                            <InputOTPSlot index={3} />
+                            <InputOTPSlot index={4} />
+                            <InputOTPSlot index={5} />
+                          </InputOTPGroup>
+                        </InputOTP>
+                      </div>
+                    </div>
+                  )}
                   
                   <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading ? (
@@ -188,10 +214,10 @@ const LoginPage = () => {
                         >
                           <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                         </svg>
-                        Signing In...
+                        {showOtpInput ? "Verifying..." : "Sending OTP..."}
                       </>
                     ) : (
-                      "Sign In"
+                      showOtpInput ? "Verify OTP" : "Continue with Email"
                     )}
                   </Button>
                 </form>
@@ -212,35 +238,13 @@ const LoginPage = () => {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="signup-email">Email</Label>
+                    <Label htmlFor="signup-email">Email (must be @srmist.edu.in)</Label>
                     <Input
                       id="signup-email"
                       type="email"
-                      placeholder="your.email@example.com"
+                      placeholder="your.email@srmist.edu.in"
                       value={signupEmail}
                       onChange={(e) => setSignupEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-password">Password</Label>
-                    <Input
-                      id="signup-password"
-                      type="password"
-                      value={signupPassword}
-                      onChange={(e) => setSignupPassword(e.target.value)}
-                      required
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="confirm-password">Confirm Password</Label>
-                    <Input
-                      id="confirm-password"
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
                       required
                     />
                   </div>
@@ -273,16 +277,8 @@ const LoginPage = () => {
             </Tabs>
           </CardContent>
           <CardFooter className="flex justify-center">
-            <p className="text-sm text-muted-foreground">
-              By signing in, you agree to our{" "}
-              <a href="#" className="underline underline-offset-4 hover:text-primary">
-                Terms of Service
-              </a>{" "}
-              and{" "}
-              <a href="#" className="underline underline-offset-4 hover:text-primary">
-                Privacy Policy
-              </a>
-              .
+            <p className="text-sm text-muted-foreground text-center">
+              Only SRM Institute emails (@srmist.edu.in) are allowed to register and log in.
             </p>
           </CardFooter>
         </Card>

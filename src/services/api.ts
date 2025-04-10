@@ -32,7 +32,7 @@ export const fetchDepartmentById = async (id: string): Promise<Department | null
   return data;
 };
 
-export const createDepartment = async (department: Partial<Department>): Promise<Department> => {
+export const createDepartment = async (department: { name: string, created_by?: string }): Promise<Department> => {
   const { data, error } = await supabase
     .from('departments')
     .insert(department)
@@ -65,11 +65,12 @@ export const fetchUserProfile = async (userId: string): Promise<Profile | null> 
     throw error;
   }
   
-  if (data && data.departments) {
-    data.department = data.departments.name;
-  }
+  const profileData = data ? {
+    ...data,
+    department: data.departments?.name
+  } : null;
   
-  return data;
+  return profileData;
 };
 
 export const fetchAllAdmins = async (): Promise<Profile[]> => {
@@ -94,7 +95,7 @@ export const fetchAllAdmins = async (): Promise<Profile[]> => {
   })) || [];
 };
 
-export const updateUserProfile = async (userId: string, profile: Partial<Profile>): Promise<Profile> => {
+export const updateUserProfile = async (userId: string, profile: Partial<Omit<Profile, 'created_at' | 'updated_at'>>): Promise<Profile> => {
   const { data, error } = await supabase
     .from('profiles')
     .update(profile)
@@ -116,15 +117,7 @@ export const fetchRequests = async (userId: string, options?: { status?: string,
     .from('requests')
     .select(`
       *,
-      departments:department_id (name),
-      sender:sender_id (
-        id,
-        profiles:id (name, department_id)
-      ),
-      receiver:receiver_id (
-        id,
-        profiles:id (name, department_id)
-      )
+      departments:department_id (name)
     `);
   
   if (options?.status && options.status !== 'all') {
@@ -145,8 +138,7 @@ export const fetchRequests = async (userId: string, options?: { status?: string,
   return data?.map(request => ({
     ...request,
     department: request.departments?.name,
-    sender_name: request.sender?.profiles?.name,
-    receiver_name: request.receiver?.profiles?.name
+    status: request.status as RequestStatus
   })) || [];
 };
 
@@ -167,11 +159,12 @@ export const fetchStudentRequests = async (studentId: string): Promise<Request[]
   
   return data?.map(request => ({
     ...request,
-    department: request.departments?.name
+    department: request.departments?.name,
+    status: request.status as RequestStatus
   })) || [];
 };
 
-export const createRequest = async (request: Partial<Request>): Promise<Request> => {
+export const createRequest = async (request: Pick<Request, 'title' | 'content' | 'sender_id' | 'department_id' | 'media'>): Promise<Request> => {
   const { data, error } = await supabase
     .from('requests')
     .insert(request)
@@ -183,10 +176,13 @@ export const createRequest = async (request: Partial<Request>): Promise<Request>
     throw error;
   }
   
-  return data;
+  return {
+    ...data,
+    status: data.status as RequestStatus
+  };
 };
 
-export const updateRequest = async (requestId: string, updates: Partial<Request>): Promise<Request> => {
+export const updateRequest = async (requestId: string, updates: Partial<Omit<Request, 'created_at' | 'updated_at'>>): Promise<Request> => {
   const { data, error } = await supabase
     .from('requests')
     .update(updates)
@@ -199,7 +195,10 @@ export const updateRequest = async (requestId: string, updates: Partial<Request>
     throw error;
   }
   
-  return data;
+  return {
+    ...data,
+    status: data.status as RequestStatus
+  };
 };
 
 // Message services
@@ -209,6 +208,7 @@ export const fetchMessagesForRequest = async (requestId: string): Promise<Messag
     .select(`
       *,
       sender:sender_id (
+        id,
         profiles:id (name)
       )
     `)
@@ -222,11 +222,12 @@ export const fetchMessagesForRequest = async (requestId: string): Promise<Messag
   
   return data?.map(message => ({
     ...message,
-    sender_name: message.sender?.profiles?.name
+    sender_name: message.sender?.profiles?.name,
+    attachments: message.attachments as any[] || []
   })) || [];
 };
 
-export const createMessage = async (message: Partial<Message>): Promise<Message> => {
+export const createMessage = async (message: Pick<Message, 'content' | 'request_id' | 'sender_id' | 'attachments'>): Promise<Message> => {
   const { data, error } = await supabase
     .from('messages')
     .insert(message)
@@ -238,11 +239,14 @@ export const createMessage = async (message: Partial<Message>): Promise<Message>
     throw error;
   }
   
-  return data;
+  return {
+    ...data,
+    attachments: data.attachments as any[] || []
+  };
 };
 
 // Rating services
-export const createRating = async (rating: Partial<Rating>): Promise<Rating> => {
+export const createRating = async (rating: Pick<Rating, 'request_id' | 'student_id' | 'rated_user_id' | 'stars' | 'comment'>): Promise<Rating> => {
   const { data, error } = await supabase
     .from('ratings')
     .insert(rating)
@@ -291,47 +295,6 @@ export const uploadFile = async (file: File, path: string): Promise<string> => {
     .getPublicUrl(fullPath);
   
   return publicUrl;
-};
-
-// Authentication and user management
-export const signUp = async (email: string, password: string, userData: { name: string, role?: string }) => {
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: userData
-    }
-  });
-  
-  if (error) {
-    console.error('Error signing up:', error);
-    throw error;
-  }
-  
-  return data;
-};
-
-export const signIn = async (email: string, password: string) => {
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password
-  });
-  
-  if (error) {
-    console.error('Error signing in:', error);
-    throw error;
-  }
-  
-  return data;
-};
-
-export const signOut = async () => {
-  const { error } = await supabase.auth.signOut();
-  
-  if (error) {
-    console.error('Error signing out:', error);
-    throw error;
-  }
 };
 
 // Stats and dashboard data

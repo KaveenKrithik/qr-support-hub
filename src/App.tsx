@@ -3,7 +3,6 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
 import DashboardLayout from './layouts/DashboardLayout';
-import AuthLayout from './layouts/AuthLayout';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 
 import LandingPage from './pages/LandingPage';
@@ -52,28 +51,100 @@ const App = () => {
         {/* Auth routes */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<LoginPage />} />
-        <Route path="/onboarding" element={<OnboardingPage />} />
+        <Route 
+          path="/onboarding" 
+          element={
+            <ProtectedRoute>
+              <OnboardingPage />
+            </ProtectedRoute>
+          } 
+        />
         
         {/* QR Scan route */}
-        <Route path="/qr" element={<QrScanPage />} />
-        <Route path="/qr/:departmentId" element={<QrScanPage />} />
+        <Route 
+          path="/qr" 
+          element={
+            <ProtectedRoute>
+              <QrScanPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route 
+          path="/qr/:departmentId" 
+          element={
+            <ProtectedRoute>
+              <QrScanPage />
+            </ProtectedRoute>
+          }
+        />
         
         {/* Dashboard routes */}
         <Route
           path="/dashboard"
           element={
             <ProtectedRoute>
-              <DashboardLayout />
+              <DashboardLayout>
+                {user ? (
+                  <Navigate to={`/dashboard/${user.role}`} replace /> 
+                ) : (
+                  <div className="flex items-center justify-center h-full">
+                    <p>Loading your dashboard...</p>
+                  </div>
+                )}
+              </DashboardLayout>
             </ProtectedRoute>
           }
-        >
-          <Route index element={<Navigate to={user ? `/dashboard/${user.role}` : "/login"} />} />
-          <Route path="student" element={<StudentDashboard />} />
-          <Route path="admin" element={<AdminDashboard />} />
-          <Route path="superadmin" element={<SuperAdminDashboard />} />
-          <Route path="profile" element={<ProfilePage />} />
-          <Route path="requests/:requestId" element={<RequestDetailsPage />} />
-        </Route>
+        />
+        <Route
+          path="/dashboard/student"
+          element={
+            <ProtectedRoute allowedRoles={["student"]}>
+              <DashboardLayout>
+                <StudentDashboard />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/admin"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <DashboardLayout>
+                <AdminDashboard />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/superadmin"
+          element={
+            <ProtectedRoute allowedRoles={["superadmin"]}>
+              <DashboardLayout>
+                <SuperAdminDashboard />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/profile"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout>
+                <ProfilePage />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/requests/:requestId"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout>
+                <RequestDetailsPage />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
         
         <Route path="*" element={<NotFound />} />
       </Routes>
