@@ -31,6 +31,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         .eq('id', authUser.id)
         .maybeSingle(); // Use maybeSingle instead of single to avoid errors when no profile exists
       
+      if (fetchError) {
+        console.error('Error fetching profile:', fetchError.message);
+      }
+      
       // If profile exists, use it
       if (existingProfile) {
         const profileData: Profile = {
@@ -52,17 +56,29 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           created_at: new Date().toISOString()
         };
         
-        const { data: createdProfile, error: createError } = await supabase
-          .from('profiles')
-          .insert(newProfile)
-          .select('*')
-          .single();
-        
-        if (createError) {
-          console.error('Error creating new user profile:', createError);
-          setUser(null);
-        } else if (createdProfile) {
-          setUser(createdProfile as Profile);
+        try {
+          const { data: createdProfile, error: createError } = await supabase
+            .from('profiles')
+            .insert(newProfile)
+            .select('*')
+            .single();
+          
+          if (createError) {
+            console.error('Error creating new user profile:', createError);
+            // Fall back to operating with unauthenticated profile
+            // This allows the user to continue, though they'll need to complete onboarding again later
+            setUser({...newProfile, isNewUser: true});
+            
+            toast({
+              title: "Profile creation issue",
+              description: "Your profile couldn't be saved automatically. You may need to set up your profile again later.",
+              variant: "destructive"
+            });
+          } else if (createdProfile) {
+            setUser(createdProfile as Profile);
+          }
+        } catch (error) {
+          console.error('Profile creation error:', error);
         }
       }
     } catch (error) {

@@ -1,7 +1,6 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth, UserProfile } from "@/context/AuthContext";
+import { useAuth } from "@/hooks/useSupabaseAuth"; // Changed from "@/context/AuthContext"
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,6 +9,19 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { PlusCircle, Loader2 } from "lucide-react";
+import { Profile } from "@/types"; // Import the Profile type
+
+// Define UserProfile type to match Profile type but with nullable role
+type UserProfile = {
+  id: string;
+  email: string;
+  role: "student" | "admin" | "superadmin" | null;
+  name: string | null;
+  department: string | null;
+  duties?: string | null;
+  qualifications?: string | null;
+  created_at?: string;
+};
 
 type Step = "role" | "details";
 

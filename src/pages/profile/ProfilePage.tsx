@@ -1,6 +1,5 @@
-
 import { useState } from "react";
-import { useAuth, UserProfile } from "@/context/AuthContext";
+import { useAuth } from "@/hooks/useSupabaseAuth"; // Changed from "@/context/AuthContext"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +10,18 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Edit2, User, Star, MessageCircle, Shield } from "lucide-react";
+import { Profile } from "@/types";
+
+// Define UserProfile type to match the profile data structure
+type UserProfile = {
+  id: string;
+  email: string;
+  role: "student" | "admin" | "superadmin" | null;
+  name: string | null;
+  department: string | null;
+  duties?: string | null;
+  qualifications?: string | null;
+};
 
 const ProfilePage = () => {
   const { user, updateProfile } = useAuth();
