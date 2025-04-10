@@ -1,35 +1,38 @@
 
 import { useState } from "react";
-import { useAuth } from "@/context/AuthContext";
-import { Input } from "@/components/ui/input";
+import { useNavigate, Link } from "react-router-dom";
+import { useAuth } from "@/hooks/useSupabaseAuth";
 import { Button } from "@/components/ui/button";
-import { useNavigate } from "react-router-dom";
-import { Mail } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { ArrowLeft } from "lucide-react";
 
 const LoginPage = () => {
-  const [email, setEmail] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const { signInWithMagicLink } = useAuth();
-  const { toast } = useToast();
+  const { signIn, signUp } = useAuth();
   const navigate = useNavigate();
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const { toast } = useToast();
+  
+  const [isLoading, setIsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("login");
+  
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  
+  const [signupEmail, setSignupEmail] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
+  const [signupName, setSignupName] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!email) {
+    if (!loginEmail.trim() || !loginPassword) {
       toast({
-        title: "Email required",
-        description: "Please enter your email address",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    if (!email.endsWith("@srmist.edu.in")) {
-      toast({
-        title: "Invalid email",
-        description: "Please use your SRM Institute email (@srmist.edu.in)",
+        title: "Invalid input",
+        description: "Please fill in all required fields.",
         variant: "destructive",
       });
       return;
@@ -38,12 +41,74 @@ const LoginPage = () => {
     setIsLoading(true);
     
     try {
-      await signInWithMagicLink(email);
-    } catch (error) {
-      console.error("Login error:", error);
+      await signIn(loginEmail, loginPassword);
+      
+      toast({
+        title: "Login successful",
+        description: "Welcome back!",
+      });
+      
+      // Redirect to dashboard
+      navigate("/dashboard/student");
+      
+    } catch (error: any) {
       toast({
         title: "Login failed",
-        description: "There was an error sending the magic link. Please try again.",
+        description: error.message || "An error occurred while trying to log in.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!signupEmail.trim() || !signupPassword || !signupName.trim()) {
+      toast({
+        title: "Invalid input",
+        description: "Please fill in all required fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (signupPassword !== confirmPassword) {
+      toast({
+        title: "Passwords don't match",
+        description: "Please ensure that your passwords match.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (signupPassword.length < 6) {
+      toast({
+        title: "Password too short",
+        description: "Password should be at least 6 characters long.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setIsLoading(true);
+    
+    try {
+      await signUp(signupEmail, signupPassword, signupName);
+      
+      toast({
+        title: "Registration successful",
+        description: "Your account has been created successfully. You can now log in.",
+      });
+      
+      // Switch to login tab
+      setActiveTab("login");
+      
+    } catch (error: any) {
+      toast({
+        title: "Registration failed",
+        description: error.message || "An error occurred while creating your account.",
         variant: "destructive",
       });
     } finally {
@@ -52,75 +117,176 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="mx-auto max-w-md space-y-6 py-10">
-      <div className="space-y-2 text-center">
-        <h1 className="text-3xl font-bold">Welcome to SRM Support Hub</h1>
-        <p className="text-muted-foreground">
-          Login with your SRM Institute email to access the support platform
-        </p>
-      </div>
-      <div className="space-y-4">
-        <div className="rounded-lg border p-6 shadow-sm">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                Email
-              </label>
-              <div className="relative">
-                <Input
-                  id="email"
-                  placeholder="yourname@srmist.edu.in"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10"
-                  disabled={isLoading}
-                />
-                <Mail className="absolute left-3 top-2.5 h-5 w-5 text-muted-foreground" />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Only @srmist.edu.in email addresses are allowed
-              </p>
-            </div>
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <svg
-                    className="mr-2 h-4 w-4 animate-spin"
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                  </svg>
-                  Sending link...
-                </>
-              ) : (
-                "Send Magic Link"
-              )}
-            </Button>
-          </form>
+    <div className="min-h-screen flex flex-col">
+      <header className="border-b">
+        <div className="container flex h-16 items-center">
+          <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
+            <ArrowLeft className="h-5 w-5" />
+            <span className="sr-only">Back to home</span>
+          </Button>
+          <h1 className="ml-4 text-lg font-semibold">Authentication</h1>
         </div>
-        <div className="text-center text-sm">
-          <p className="text-muted-foreground">
-            By logging in, you agree to our{" "}
-            <a className="underline underline-offset-4 hover:text-primary" href="#">
-              Terms of Service
-            </a>{" "}
-            and{" "}
-            <a className="underline underline-offset-4 hover:text-primary" href="#">
-              Privacy Policy
-            </a>
-            .
-          </p>
-        </div>
-      </div>
+      </header>
+      
+      <main className="flex-1 flex items-center justify-center py-12 px-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl">Welcome to SRM Support Hub</CardTitle>
+            <CardDescription>Sign in to your account or register</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="login">Login</TabsTrigger>
+                <TabsTrigger value="register">Register</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="login">
+                <form onSubmit={handleLogin} className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="login-email">Email</Label>
+                    <Input
+                      id="login-email"
+                      type="email"
+                      placeholder="your.email@example.com"
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="login-password">Password</Label>
+                      <Link to="/forgot-password" className="text-sm text-blue-600 hover:underline">
+                        Forgot password?
+                      </Link>
+                    </div>
+                    <Input
+                      id="login-password"
+                      type="password"
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  
+                  <Button type="submit" className="w-full" disabled={isLoading}>
+                    {isLoading ? (
+                      <>
+                        <svg
+                          className="mr-2 h-4 w-4 animate-spin"
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                        </svg>
+                        Signing In...
+                      </>
+                    ) : (
+                      "Sign In"
+                    )}
+                  </Button>
+                </form>
+              </TabsContent>
+              
+              <TabsContent value="register">
+                <form onSubmit={handleSignup} className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-name">Full Name</Label>
+                    <Input
+                      id="signup-name"
+                      type="text"
+                      placeholder="John Doe"
+                      value={signupName}
+                      onChange={(e) => setSignupName(e.target.value)}
+                      required
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-email">Email</Label>
+                    <Input
+                      id="signup-email"
+                      type="email"
+                      placeholder="your.email@example.com"
+                      value={signupEmail}
+                      onChange={(e) => setSignupEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-password">Password</Label>
+                    <Input
+                      id="signup-password"
+                      type="password"
+                      value={signupPassword}
+                      onChange={(e) => setSignupPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="confirm-password">Confirm Password</Label>
+                    <Input
+                      id="confirm-password"
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  
+                  <Button type="submit" className="w-full" disabled={isLoading}>
+                    {isLoading ? (
+                      <>
+                        <svg
+                          className="mr-2 h-4 w-4 animate-spin"
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                        </svg>
+                        Registering...
+                      </>
+                    ) : (
+                      "Register"
+                    )}
+                  </Button>
+                </form>
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+          <CardFooter className="flex justify-center">
+            <p className="text-sm text-muted-foreground">
+              By signing in, you agree to our{" "}
+              <a href="#" className="underline underline-offset-4 hover:text-primary">
+                Terms of Service
+              </a>{" "}
+              and{" "}
+              <a href="#" className="underline underline-offset-4 hover:text-primary">
+                Privacy Policy
+              </a>
+              .
+            </p>
+          </CardFooter>
+        </Card>
+      </main>
     </div>
   );
 };
