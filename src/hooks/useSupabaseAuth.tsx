@@ -1,7 +1,11 @@
 import { useState, useEffect, createContext, useContext } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Session, User } from '@supabase/supabase-js';
-import { Profile } from '@/types';
+import { Profile as BaseProfile } from '@/types';
+
+type Profile = BaseProfile & {
+  isNewUser?: boolean;
+};
 import { toast } from '@/components/ui/use-toast';
 
 type AuthContextType = {
