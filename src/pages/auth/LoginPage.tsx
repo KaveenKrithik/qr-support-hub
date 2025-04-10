@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useSupabaseAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,20 +9,17 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft } from "lucide-react";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 
 const LoginPage = () => {
-  const { signIn, signUp, verifyOTP } = useAuth();
+  const { signIn, signUp } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("login");
-  const [showOtpInput, setShowOtpInput] = useState(false);
 
   // Login states
   const [loginEmail, setLoginEmail] = useState("");
-  const [loginOtp, setLoginOtp] = useState("");
   
   // Signup states
   const [signupEmail, setSignupEmail] = useState("");
@@ -40,40 +37,18 @@ const LoginPage = () => {
       return;
     }
     
-    if (showOtpInput) {
-      // Verify OTP
-      if (!loginOtp || loginOtp.length < 6) {
-        toast({
-          title: "Invalid OTP",
-          description: "Please enter the complete OTP sent to your email.",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      setIsLoading(true);
-      
-      try {
-        await verifyOTP(loginEmail, loginOtp);
-        navigate("/dashboard");
-      } catch (error) {
-        // Error toast is handled in the auth context
-      } finally {
-        setIsLoading(false);
-      }
-      
-    } else {
-      // Send magic link/OTP
-      setIsLoading(true);
-      
-      try {
-        await signIn(loginEmail);
-        setShowOtpInput(true);
-      } catch (error) {
-        // Error toast is handled in the auth context
-      } finally {
-        setIsLoading(false);
-      }
+    setIsLoading(true);
+    
+    try {
+      await signIn(loginEmail);
+      toast({
+        title: "Magic link sent",
+        description: "Please check your email for the login link.",
+      });
+    } catch (error) {
+      // Error toast is handled in the auth context
+    } finally {
+      setIsLoading(false);
     }
   };
   
@@ -118,11 +93,6 @@ const LoginPage = () => {
     }
   };
 
-  const resetOtpProcess = () => {
-    setShowOtpInput(false);
-    setLoginOtp("");
-  };
-
   return (
     <div className="min-h-screen flex flex-col">
       <header className="border-b">
@@ -150,52 +120,17 @@ const LoginPage = () => {
               
               <TabsContent value="login">
                 <form onSubmit={handleLogin} className="space-y-4 mt-4">
-                  {!showOtpInput ? (
-                    <div className="space-y-2">
-                      <Label htmlFor="login-email">Email (must be @srmist.edu.in)</Label>
-                      <Input
-                        id="login-email"
-                        type="email"
-                        placeholder="your.email@srmist.edu.in"
-                        value={loginEmail}
-                        onChange={(e) => setLoginEmail(e.target.value)}
-                        required
-                      />
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="text-center mb-4">
-                        <p className="text-sm text-muted-foreground">
-                          Enter the OTP sent to {loginEmail}
-                        </p>
-                        <Button 
-                          variant="link" 
-                          type="button" 
-                          className="p-0 h-auto" 
-                          onClick={resetOtpProcess}
-                        >
-                          Change email
-                        </Button>
-                      </div>
-                      
-                      <div className="flex justify-center">
-                        <InputOTP 
-                          maxLength={6} 
-                          value={loginOtp} 
-                          onChange={setLoginOtp}
-                        >
-                          <InputOTPGroup>
-                            <InputOTPSlot index={0} />
-                            <InputOTPSlot index={1} />
-                            <InputOTPSlot index={2} />
-                            <InputOTPSlot index={3} />
-                            <InputOTPSlot index={4} />
-                            <InputOTPSlot index={5} />
-                          </InputOTPGroup>
-                        </InputOTP>
-                      </div>
-                    </div>
-                  )}
+                  <div className="space-y-2">
+                    <Label htmlFor="login-email">Email (must be @srmist.edu.in)</Label>
+                    <Input
+                      id="login-email"
+                      type="email"
+                      placeholder="your.email@srmist.edu.in"
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                      required
+                    />
+                  </div>
                   
                   <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading ? (
@@ -214,10 +149,10 @@ const LoginPage = () => {
                         >
                           <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                         </svg>
-                        {showOtpInput ? "Verifying..." : "Sending OTP..."}
+                        Sending Magic Link...
                       </>
                     ) : (
-                      showOtpInput ? "Verify OTP" : "Continue with Email"
+                      "Send Magic Link"
                     )}
                   </Button>
                 </form>

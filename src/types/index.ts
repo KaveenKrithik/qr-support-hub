@@ -7,7 +7,7 @@ export type Department = {
   updated_at?: string;
 };
 
-export type RequestStatus = "pending" | "active" | "resolved" | "escalated" | "in_progress";
+export type RequestStatus = "pending" | "in_progress" | "resolved" | "escalated";
 
 export type Request = {
   id: string;

@@ -11,7 +11,6 @@ type AuthContextType = {
   isLoading: boolean;
   signIn: (email: string) => Promise<void>;
   signUp: (email: string, name: string) => Promise<void>;
-  verifyOTP: (email: string, token: string) => Promise<void>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<void>;
 };
@@ -110,20 +109,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         throw new Error('Only SRM Institute emails (@srmist.edu.in) are allowed');
       }
 
-      // Use OTP instead of magic link
+      // Use magic link
       const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
-          // Don't use email redirect to force OTP verification
-          shouldCreateUser: false // Don't create a new user on sign-in
+          emailRedirectTo: window.location.origin + '/dashboard'
         }
       });
       
       if (error) throw error;
       
       toast({
-        title: "OTP sent",
-        description: "Check your email for the verification code"
+        title: "Magic link sent",
+        description: "Check your email for the login link"
       });
       
     } catch (error: any) {
@@ -137,47 +135,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const verifyOTP = async (email: string, token: string) => {
-    try {
-      if (!validateSrmEmail(email)) {
-        throw new Error('Only SRM Institute emails (@srmist.edu.in) are allowed');
-      }
-
-      const { error } = await supabase.auth.verifyOtp({
-        email,
-        token,
-        type: 'email'
-      });
-      
-      if (error) throw error;
-      
-      toast({
-        title: "Login successful",
-        description: "You have been logged in successfully"
-      });
-      
-    } catch (error: any) {
-      console.error('Error verifying OTP:', error);
-      toast({
-        variant: "destructive",
-        title: "Error verifying OTP",
-        description: error.message
-      });
-      throw error;
-    }
-  };
-
   const signUp = async (email: string, name: string) => {
     try {
       if (!validateSrmEmail(email)) {
         throw new Error('Only SRM Institute emails (@srmist.edu.in) are allowed');
       }
 
-      // Use OTP for signups too
+      // Use magic link for signups too
       const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
-          // Don't use email redirect to force OTP verification
+          emailRedirectTo: window.location.origin + '/dashboard',
           data: {
             name
           }
@@ -187,8 +155,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (error) throw error;
 
       toast({
-        title: "Verification code sent",
-        description: "Please check your email for the OTP verification code"
+        title: "Verification email sent",
+        description: "Please check your email for the login link"
       });
       
     } catch (error: any) {
@@ -259,7 +227,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         isLoading,
         signIn,
         signUp,
-        verifyOTP,
         signOut,
         updateProfile,
       }}

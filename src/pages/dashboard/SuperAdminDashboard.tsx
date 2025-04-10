@@ -1,538 +1,176 @@
+import { useEffect, useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { getDashboardStats } from "@/services/api";
+import { Activity, CheckCircle, Clock, Files } from "lucide-react";
 
-import { useState, useEffect } from 'react';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { useToast } from "@/hooks/use-toast";
-import { 
-  ArrowUpDown, 
-  CirclePlus, 
-  FileEdit, 
-  MoreHorizontal, 
-  Trash, 
-  UserPlus, 
-  Users
-} from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/hooks/useSupabaseAuth";
-import { fetchAllDepartments, createDepartment, getDashboardStats, fetchAllAdmins } from '@/services/api';
-import { Department, Profile, Request } from '@/types';
-
-// Status badge variant mapping
-const getStatusVariant = (status: string) => {
-  switch (status) {
-    case 'pending': return 'secondary';
-    case 'active': return 'default';
-    case 'resolved': return 'success';
-    case 'escalated': return 'destructive';
-    default: return 'outline';
-  }
-};
+interface DashboardStats {
+  total: number;
+  pending: number;
+  active: number;
+  resolved: number;
+  escalated: number;
+  departmentCount: number;
+  adminCount: number;
+}
 
 const SuperAdminDashboard = () => {
-  const { toast } = useToast();
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  
-  // State for stats
-  const [stats, setStats] = useState({
-    total: 0,
-    pending: 0,
-    active: 0,
-    resolved: 0,
-    escalated: 0,
-    departmentCount: 0,
-    adminCount: 0
-  });
-  
-  // State for departments
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [newDepartment, setNewDepartment] = useState("");
-  const [isCreatingDepartment, setIsCreatingDepartment] = useState(false);
-  const [isDepartmentDialogOpen, setIsDepartmentDialogOpen] = useState(false);
-  
-  // State for admins
-  const [admins, setAdmins] = useState<Profile[]>([]);
-  
-  // State for requests
-  const [requests, setRequests] = useState<Request[]>([]);
-  
-  // Fetch data on component mount
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [isStatsLoading, setIsStatsLoading] = useState(true);
+  const [statsError, setStatsError] = useState<Error | null>(null);
+
   useEffect(() => {
-    const fetchDashboardData = async () => {
+    const fetchStats = async () => {
+      setIsStatsLoading(true);
       try {
-        // Fetch stats
-        const statsData = await getDashboardStats();
-        setStats(statsData);
-        
-        // Fetch departments
-        const departmentsData = await fetchAllDepartments();
-        setDepartments(departmentsData);
-        
-        // Fetch admins
-        const adminsData = await fetchAllAdmins();
-        setAdmins(adminsData);
-        
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error);
-        toast({
-          variant: "destructive",
-          title: "Error loading dashboard",
-          description: "Could not load dashboard data. Please try again."
-        });
+        const data = await getDashboardStats();
+        setStats(data);
+      } catch (error: any) {
+        setStatsError(error);
+        console.error("Failed to fetch dashboard stats:", error);
+      } finally {
+        setIsStatsLoading(false);
       }
     };
-    
-    fetchDashboardData();
-  }, [toast]);
-  
-  // Create new department
-  const handleCreateDepartment = async () => {
-    if (!newDepartment.trim()) {
-      toast({
-        variant: "destructive",
-        title: "Invalid department name",
-        description: "Please enter a valid department name."
-      });
-      return;
-    }
-    
-    setIsCreatingDepartment(true);
-    
-    try {
-      const createdDepartment = await createDepartment({ 
-        name: newDepartment.trim(), 
-        created_by: user?.id 
-      });
-      
-      setDepartments([...departments, createdDepartment]);
-      setStats(prev => ({
-        ...prev,
-        departmentCount: prev.departmentCount + 1
-      }));
-      
-      toast({
-        title: "Department created",
-        description: `${newDepartment.trim()} has been created successfully.`
-      });
-      
-      setNewDepartment("");
-      setIsDepartmentDialogOpen(false);
-      
-    } catch (error: any) {
-      console.error('Error creating department:', error);
-      toast({
-        variant: "destructive",
-        title: "Error creating department",
-        description: error.message || "Failed to create department. Please try again."
-      });
-    } finally {
-      setIsCreatingDepartment(false);
-    }
-  };
-  
+
+    fetchStats();
+  }, []);
+
+  const StatCard = ({ title, value, icon, variant = "default" }: {
+    title: string;
+    value: number;
+    icon: React.ReactNode;
+    variant?: "default" | "outline" | "secondary";
+  }) => (
+    <Card className={`shadow-sm border-0 ${variant === 'outline' ? 'bg-transparent' : ''}`}>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        {icon}
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{value}</div>
+      </CardContent>
+    </Card>
+  );
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Super Admin Dashboard</h1>
-        <p className="text-muted-foreground">
-          Manage departments, admins, and requests across the platform.
-        </p>
+    <div className="container py-10">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold tracking-tight">Super Admin Dashboard</h1>
+        <p className="text-muted-foreground">Overview of the SRM Support Hub</p>
       </div>
       
-      {/* Stats Overview Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:gap-8 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Requests</CardTitle>
+          <CardHeader>
+            <CardTitle>Requests</CardTitle>
+            <CardDescription>Overview of all requests</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.total}</div>
-            <p className="text-xs text-muted-foreground">
-              Total requests across all departments
-            </p>
+          <CardContent className="text-center">
+            {isStatsLoading ? (
+              <div className="flex justify-center py-8">
+                <svg
+                  className="h-12 w-12 animate-spin text-primary"
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                </svg>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                <StatCard 
+                  title="Total" 
+                  value={stats?.total || 0}
+                  icon={<Files className="h-5 w-5" />}
+                />
+                <StatCard 
+                  title="Pending" 
+                  value={stats?.pending || 0}
+                  icon={<Clock className="h-5 w-5" />}
+                  variant="outline"
+                />
+                <StatCard 
+                  title="Active" 
+                  value={stats?.active || 0}
+                  icon={<Activity className="h-5 w-5" />}
+                  variant="default"
+                />
+                <StatCard 
+                  title="Resolved" 
+                  value={stats?.resolved || 0}
+                  icon={<CheckCircle className="h-5 w-5" />}
+                  variant="secondary"
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
-        
+
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Departments</CardTitle>
+          <CardHeader>
+            <CardTitle>Departments</CardTitle>
+            <CardDescription>Number of departments</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.departmentCount}</div>
-            <p className="text-xs text-muted-foreground">
-              Active departments on the platform
-            </p>
+          <CardContent className="text-center">
+            {isStatsLoading ? (
+              <div className="flex justify-center py-8">
+                <svg
+                  className="h-12 w-12 animate-spin text-primary"
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                </svg>
+              </div>
+            ) : (
+              <div className="text-4xl font-bold">{stats?.departmentCount || 0}</div>
+            )}
           </CardContent>
         </Card>
-        
+
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Admins</CardTitle>
+          <CardHeader>
+            <CardTitle>Admins</CardTitle>
+            <CardDescription>Number of administrators</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.adminCount}</div>
-            <p className="text-xs text-muted-foreground">
-              Admin users across all departments
-            </p>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Requests</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.pending}</div>
-            <p className="text-xs text-muted-foreground">
-              Requests awaiting assignment
-            </p>
+          <CardContent className="text-center">
+            {isStatsLoading ? (
+              <div className="flex justify-center py-8">
+                <svg
+                  className="h-12 w-12 animate-spin text-primary"
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                </svg>
+              </div>
+            ) : (
+              <div className="text-4xl font-bold">{stats?.adminCount || 0}</div>
+            )}
           </CardContent>
         </Card>
       </div>
-      
-      {/* Main Dashboard Tabs */}
-      <Tabs defaultValue="departments" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="departments">Departments</TabsTrigger>
-          <TabsTrigger value="admins">Admins</TabsTrigger>
-          <TabsTrigger value="requests">Requests</TabsTrigger>
-        </TabsList>
-        
-        {/* Departments Tab */}
-        <TabsContent value="departments" className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-bold">Departments</h2>
-            <Dialog open={isDepartmentDialogOpen} onOpenChange={setIsDepartmentDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <CirclePlus className="mr-2 h-4 w-4" />
-                  Add Department
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Create New Department</DialogTitle>
-                  <DialogDescription>
-                    Add a new department to the system.
-                  </DialogDescription>
-                </DialogHeader>
-                <form onSubmit={(e) => { e.preventDefault(); handleCreateDepartment(); }}>
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Department Name</Label>
-                      <Input 
-                        id="name"
-                        placeholder="e.g., Computer Science"
-                        value={newDepartment}
-                        onChange={(e) => setNewDepartment(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button 
-                      type="submit" 
-                      disabled={isCreatingDepartment || !newDepartment.trim()}
-                    >
-                      {isCreatingDepartment ? "Creating..." : "Create Department"}
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
-          </div>
-          
-          <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[100px]">ID</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {departments.map((department) => (
-                    <TableRow key={department.id}>
-                      <TableCell className="font-medium">{department.id.substring(0, 8)}...</TableCell>
-                      <TableCell>{department.name}</TableCell>
-                      <TableCell>{new Date(department.created_at || '').toLocaleDateString()}</TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => {
-                                // View department functionality
-                                toast({
-                                  title: "View Department",
-                                  description: `Viewing ${department.name}`
-                                });
-                              }}
-                            >
-                              View details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => {
-                                // Edit department functionality
-                                toast({
-                                  title: "Edit Department",
-                                  description: `Editing ${department.name}`
-                                });
-                              }}
-                            >
-                              Edit department
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="text-destructive"
-                              onClick={() => {
-                                // Delete department functionality
-                                toast({
-                                  title: "Delete Department",
-                                  description: `${department.name} will be deleted`,
-                                  variant: "destructive"
-                                });
-                              }}
-                            >
-                              Delete department
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  
-                  {departments.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-center py-6 text-muted-foreground">
-                        No departments found. Add your first department!
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        {/* Admins Tab */}
-        <TabsContent value="admins" className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-bold">Admins</h2>
-            <Button>
-              <UserPlus className="mr-2 h-4 w-4" />
-              Add Admin
-            </Button>
-          </div>
-          
-          <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[100px]">ID</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Department</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {admins.map((admin) => (
-                    <TableRow key={admin.id}>
-                      <TableCell className="font-medium">{admin.id.substring(0, 8)}...</TableCell>
-                      <TableCell>{admin.name}</TableCell>
-                      <TableCell>{admin.email}</TableCell>
-                      <TableCell>{admin.department || 'Not assigned'}</TableCell>
-                      <TableCell>
-                        <Badge variant={admin.role === 'superadmin' ? 'destructive' : 'default'}>
-                          {admin.role}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => {
-                                // View admin profile
-                                toast({
-                                  title: "View Admin",
-                                  description: `Viewing ${admin.name}'s profile`
-                                });
-                              }}
-                            >
-                              View profile
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => {
-                                // Edit admin functionality
-                                toast({
-                                  title: "Edit Admin",
-                                  description: `Editing ${admin.name}'s details`
-                                });
-                              }}
-                            >
-                              Edit admin
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="text-destructive"
-                              onClick={() => {
-                                // Delete admin functionality
-                                toast({
-                                  title: "Remove Admin",
-                                  description: `${admin.name} will be removed`,
-                                  variant: "destructive"
-                                });
-                              }}
-                            >
-                              Remove admin
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  
-                  {admins.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
-                        No admin users found.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        {/* Requests Tab */}
-        <TabsContent value="requests" className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-bold">All Requests</h2>
-            <Button variant="outline" onClick={() => {
-              // Refresh requests functionality
-              toast({
-                title: "Refreshing",
-                description: "Getting the latest requests"
-              });
-            }}>
-              <ArrowUpDown className="mr-2 h-4 w-4" />
-              Refresh
-            </Button>
-          </div>
-          
-          <Card>
-            <CardContent className="p-0">
-              <ScrollArea className="h-[600px]">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[100px]">ID</TableHead>
-                      <TableHead>Title</TableHead>
-                      <TableHead>Department</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Created</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {requests.map((request) => (
-                      <TableRow key={request.id}>
-                        <TableCell className="font-medium">
-                          {request.id.substring(0, 8)}...
-                        </TableCell>
-                        <TableCell>{request.title}</TableCell>
-                        <TableCell>{request.department}</TableCell>
-                        <TableCell>
-                          <Badge variant={getStatusVariant(request.status)}>
-                            {request.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {new Date(request.created_at).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              navigate(`/dashboard/requests/${request.id}`);
-                            }}
-                          >
-                            <FileEdit className="h-4 w-4 mr-1" /> View
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    
-                    {requests.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
-                          No requests found.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
     </div>
   );
 };

@@ -1,6 +1,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { Department, Request, Profile, Message, Rating } from "@/types";
+import { Department, Request, Profile, Message, Rating, RequestStatus } from "@/types";
 import { Json } from "@/integrations/supabase/types";
 
 // Helper function to convert JSON to typed array
@@ -126,7 +126,7 @@ export const updateUserProfile = async (userId: string, profile: Partial<Omit<Pr
 };
 
 // Request services
-export const fetchRequests = async (userId: string, options?: { status?: string, departmentId?: string }): Promise<Request[]> => {
+export const fetchRequests = async (userId: string, options?: { status?: RequestStatus | 'all', departmentId?: string }): Promise<Request[]> => {
   let query = supabase
     .from('requests')
     .select(`
@@ -152,7 +152,7 @@ export const fetchRequests = async (userId: string, options?: { status?: string,
   return data?.map(request => ({
     ...request,
     department: request.departments?.name,
-    status: request.status as Request['status'],
+    status: request.status as RequestStatus,
     media: parseJsonArray(request.media),
   })) || [];
 };
@@ -175,7 +175,7 @@ export const fetchStudentRequests = async (studentId: string): Promise<Request[]
   return data?.map(request => ({
     ...request,
     department: request.departments?.name,
-    status: request.status as Request['status'],
+    status: request.status as RequestStatus,
     media: parseJsonArray(request.media),
   })) || [];
 };
@@ -194,18 +194,14 @@ export const createRequest = async (request: Pick<Request, 'title' | 'content' |
   
   return {
     ...data,
-    status: data.status as Request['status'],
+    status: data.status as RequestStatus,
     media: parseJsonArray(data.media),
   };
 };
 
 export const updateRequest = async (requestId: string, updates: Partial<Omit<Request, 'created_at' | 'updated_at'>>): Promise<Request> => {
-  const supabaseUpdates = { ...updates };
-  
   // Convert RequestStatus to string if it exists in updates
-  if (updates.status) {
-    supabaseUpdates.status = updates.status;
-  }
+  const supabaseUpdates = { ...updates };
   
   const { data, error } = await supabase
     .from('requests')
@@ -221,7 +217,7 @@ export const updateRequest = async (requestId: string, updates: Partial<Omit<Req
   
   return {
     ...data,
-    status: data.status as Request['status'],
+    status: data.status as RequestStatus,
     media: parseJsonArray(data.media),
   };
 };
@@ -355,7 +351,7 @@ export const getDashboardStats = async () => {
   const stats = {
     total: requests?.length || 0,
     pending: requests?.filter(r => r.status === 'pending').length || 0,
-    active: requests?.filter(r => r.status === 'active').length || 0,
+    active: requests?.filter(r => r.status === 'in_progress').length || 0,
     resolved: requests?.filter(r => r.status === 'resolved').length || 0,
     escalated: requests?.filter(r => r.status === 'escalated').length || 0,
     departmentCount: departments?.length || 0,
