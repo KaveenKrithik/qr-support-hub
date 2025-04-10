@@ -110,18 +110,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         throw new Error('Only SRM Institute emails (@srmist.edu.in) are allowed');
       }
 
+      // Use OTP instead of magic link
       const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
-          emailRedirectTo: window.location.origin
+          // Don't use email redirect to force OTP verification
+          shouldCreateUser: false // Don't create a new user on sign-in
         }
       });
       
       if (error) throw error;
       
       toast({
-        title: "Magic link sent",
-        description: "Check your email for the login link"
+        title: "OTP sent",
+        description: "Check your email for the verification code"
       });
       
     } catch (error: any) {
@@ -171,10 +173,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         throw new Error('Only SRM Institute emails (@srmist.edu.in) are allowed');
       }
 
+      // Use OTP for signups too
       const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
-          emailRedirectTo: window.location.origin,
+          // Don't use email redirect to force OTP verification
           data: {
             name
           }
@@ -184,8 +187,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (error) throw error;
 
       toast({
-        title: "Verification email sent",
-        description: "Please check your email for the verification link"
+        title: "Verification code sent",
+        description: "Please check your email for the OTP verification code"
       });
       
     } catch (error: any) {

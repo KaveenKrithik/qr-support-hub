@@ -1,6 +1,20 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { Department, Request, Profile, Message, Rating } from "@/types";
+import { Json } from "@/integrations/supabase/types";
+
+// Helper function to convert JSON to typed array
+const parseJsonArray = (json: Json | null): any[] => {
+  if (!json) return [];
+  if (typeof json === 'string') {
+    try {
+      return JSON.parse(json);
+    } catch (e) {
+      return [];
+    }
+  }
+  return Array.isArray(json) ? json : [];
+};
 
 // Department services
 export const fetchAllDepartments = async (): Promise<Department[]> => {
@@ -138,7 +152,8 @@ export const fetchRequests = async (userId: string, options?: { status?: string,
   return data?.map(request => ({
     ...request,
     department: request.departments?.name,
-    status: request.status as RequestStatus
+    status: request.status as Request['status'],
+    media: parseJsonArray(request.media),
   })) || [];
 };
 
@@ -160,7 +175,8 @@ export const fetchStudentRequests = async (studentId: string): Promise<Request[]
   return data?.map(request => ({
     ...request,
     department: request.departments?.name,
-    status: request.status as RequestStatus
+    status: request.status as Request['status'],
+    media: parseJsonArray(request.media),
   })) || [];
 };
 
@@ -178,14 +194,22 @@ export const createRequest = async (request: Pick<Request, 'title' | 'content' |
   
   return {
     ...data,
-    status: data.status as RequestStatus
+    status: data.status as Request['status'],
+    media: parseJsonArray(data.media),
   };
 };
 
 export const updateRequest = async (requestId: string, updates: Partial<Omit<Request, 'created_at' | 'updated_at'>>): Promise<Request> => {
+  const supabaseUpdates = { ...updates };
+  
+  // Convert RequestStatus to string if it exists in updates
+  if (updates.status) {
+    supabaseUpdates.status = updates.status;
+  }
+  
   const { data, error } = await supabase
     .from('requests')
-    .update(updates)
+    .update(supabaseUpdates)
     .eq('id', requestId)
     .select()
     .single();
@@ -197,7 +221,8 @@ export const updateRequest = async (requestId: string, updates: Partial<Omit<Req
   
   return {
     ...data,
-    status: data.status as RequestStatus
+    status: data.status as Request['status'],
+    media: parseJsonArray(data.media),
   };
 };
 
@@ -207,10 +232,7 @@ export const fetchMessagesForRequest = async (requestId: string): Promise<Messag
     .from('messages')
     .select(`
       *,
-      sender:sender_id (
-        id,
-        profiles:id (name)
-      )
+      sender:profiles!sender_id (name)
     `)
     .eq('request_id', requestId)
     .order('created_at', { ascending: true });
@@ -222,8 +244,8 @@ export const fetchMessagesForRequest = async (requestId: string): Promise<Messag
   
   return data?.map(message => ({
     ...message,
-    sender_name: message.sender?.profiles?.name,
-    attachments: message.attachments as any[] || []
+    sender_name: message.sender?.name,
+    attachments: parseJsonArray(message.attachments)
   })) || [];
 };
 
@@ -241,7 +263,7 @@ export const createMessage = async (message: Pick<Message, 'content' | 'request_
   
   return {
     ...data,
-    attachments: data.attachments as any[] || []
+    attachments: parseJsonArray(data.attachments),
   };
 };
 
