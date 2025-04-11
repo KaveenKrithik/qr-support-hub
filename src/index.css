@@ -1,4 +1,3 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -96,5 +95,26 @@
   
   .srm-gradient {
     @apply bg-gradient-to-r from-srmblue to-srmblue-dark;
+  }
+
+  /* QR Code Scanner styles */
+  .qr-scanner-container {
+    @apply w-full max-w-[300px] h-[300px] mx-auto overflow-hidden rounded-lg;
+  }
+
+  #qr-reader {
+    @apply w-full h-full border-none !important;
+  }
+
+  #qr-reader video {
+    @apply w-full h-full object-cover !important;
+  }
+
+  #qr-reader__scan_region {
+    @apply min-h-[200px] !important;
+  }
+
+  #qr-reader__dashboard_section_swaplink {
+    @apply hidden !important;
   }
 }
