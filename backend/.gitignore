@@ -1,0 +1,12 @@
+
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json  # Optional: Include if you use npm and want to lock dependencies
+
+.env
+
+
+qr-code.png
+logs/
+*.log
