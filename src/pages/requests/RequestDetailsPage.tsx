@@ -1,53 +1,25 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useAuth } from "@/hooks/useSupabaseAuth"; // Updated import path
+import { useAuth } from "@/hooks/useSupabaseAuth"; 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft, Clock, Paperclip, Send, User, Star, CheckCircle, XCircle, AlertCircle, MessageCircle } from "lucide-react";
+import { fetchRequests, fetchMessagesForRequest, fetchUserProfile, createMessage, updateRequest, createRating } from "@/services/api";
+import { Request as BaseRequest, RequestStatus, Message, Profile } from "@/types";
 
-type RequestStatus = "pending" | "active" | "resolved" | "escalated";
-
-type Request = {
-  id: string;
-  title: string;
-  content: string;
-  department: string;
-  status: RequestStatus;
-  student: {
-    id: string;
-    name: string;
-    department: string;
-  };
-  assignedTo?: {
-    id: string;
-    name: string;
-    department: string;
-  };
-  responses: {
-    id: string;
-    text: string;
-    sender: {
-      id: string;
-      name: string;
-      role: "student" | "admin" | "superadmin";
-    };
-    timestamp: Date;
-  }[];
+// Extended Request type with frontend-specific properties
+interface Request extends BaseRequest {
   createdAt: Date;
   updatedAt: Date;
-  attachments?: {
-    id: string;
-    name: string;
-    type: string;
-  }[];
-};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  media: any[];
+}
 
 const RequestDetailsPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -56,6 +28,9 @@ const RequestDetailsPage = () => {
   const { toast } = useToast();
   
   const [request, setRequest] = useState<Request | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [studentProfile, setStudentProfile] = useState<Profile | null>(null);
+  const [adminProfile, setAdminProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [responseText, setResponseText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -64,84 +39,66 @@ const RequestDetailsPage = () => {
   const [ratingComment, setRatingComment] = useState("");
   const [isRating, setIsRating] = useState(false);
   
-  // Mock fetch request data
+  // Fetch request data
   useEffect(() => {
-    // This would be replaced with a real API call
-    setTimeout(() => {
-      if (id === "req1" || !id) {
-        const mockRequest: Request = {
-          id: "req1",
-          title: "Attendance correction request",
-          content: "I need to correct my attendance for CS101 on May 5th. I was present but marked absent.",
-          department: "Computer Science",
-          status: "active",
-          student: {
-            id: "stud1",
-            name: "Rahul Sharma",
-            department: "Computer Science"
-          },
-          assignedTo: {
-            id: "admin1",
-            name: "Dr. John Smith",
-            department: "Computer Science"
-          },
-          responses: [
-            {
-              id: "resp1",
-              text: "Thank you for your request. I'll check the attendance records and get back to you.",
-              sender: {
-                id: "admin1",
-                name: "Dr. John Smith",
-                role: "admin"
-              },
-              timestamp: new Date(2025, 3, 8, 14, 30)
-            },
-            {
-              id: "resp2",
-              text: "I've verified that you were present. Can you please confirm which session you were marked absent for?",
-              sender: {
-                id: "admin1",
-                name: "Dr. John Smith",
-                role: "admin"
-              },
-              timestamp: new Date(2025, 3, 8, 15, 45)
-            },
-            {
-              id: "resp3",
-              text: "It was the morning session from 9:00 AM to 10:30 AM.",
-              sender: {
-                id: "stud1",
-                name: "Rahul Sharma",
-                role: "student"
-              },
-              timestamp: new Date(2025, 3, 8, 16, 10)
-            }
-          ],
-          createdAt: new Date(2025, 3, 8, 10, 15),
-          updatedAt: new Date(2025, 3, 8, 16, 10),
-          attachments: [
-            {
-              id: "att1",
-              name: "attendance_screenshot.png",
-              type: "image/png"
-            }
-          ]
-        };
-        
-        setRequest(mockRequest);
-      } else {
-        // Navigate to 404 if request not found
+    const fetchRequestData = async () => {
+      if (!id) {
         navigate("/not-found");
+        return;
       }
       
-      setLoading(false);
-    }, 1000);
-  }, [id, navigate]);
+      try {
+        // Fetch the request details
+        const requests = await fetchRequests(id);
+        const requestData = requests[0];
+        if (!requestData) {
+          navigate("/not-found");
+          return;
+        }
+        
+        // Format and set request data
+        setRequest({
+          ...requestData,
+          createdAt: new Date(requestData.created_at || Date.now()),
+          updatedAt: new Date(requestData.updated_at || Date.now()),
+          media: Array.isArray(requestData.media) ? requestData.media : []
+        });
+        
+        // Fetch student profile
+        if (requestData.sender_id) {
+          const senderProfile = await fetchUserProfile(requestData.sender_id);
+          setStudentProfile(senderProfile);
+        }
+        
+        // Fetch admin profile if request is assigned
+        if (requestData.receiver_id) {
+          const receiverProfile = await fetchUserProfile(requestData.receiver_id);
+          setAdminProfile(receiverProfile);
+        }
+        
+        // Fetch messages for this request
+        const messagesData = await fetchMessagesForRequest(id);
+        setMessages(messagesData);
+        
+      } catch (error) {
+        console.error("Error fetching request data:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load request details. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchRequestData();
+  }, [id, navigate, toast]);
   
-  const handleSubmitResponse = (e: React.FormEvent) => {
+  const handleSubmitResponse = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!responseText.trim()) {
+    if (!responseText.trim() || !user?.id || !request?.id) {
       toast({
         title: "Empty response",
         description: "Please enter a response",
@@ -152,62 +109,96 @@ const RequestDetailsPage = () => {
     
     setIsSubmitting(true);
     
-    // This would be replaced with a real API call
-    setTimeout(() => {
-      if (request) {
-        const newResponse = {
-          id: `resp${Math.random().toString(36).substr(2, 9)}`,
-          text: responseText,
-          sender: {
-            id: user?.id || "unknown",
-            name: user?.name || "Unknown User",
-            role: user?.role || "student"
-          },
-          timestamp: new Date()
-        };
-        
-        const updatedRequest = {
-          ...request,
-          responses: [...request.responses, newResponse],
-          updatedAt: new Date()
-        };
-        
-        setRequest(updatedRequest);
-        setResponseText("");
-        setIsSubmitting(false);
-        
-        toast({
-          title: "Response sent",
-          description: "Your response has been added successfully.",
-        });
+    try {
+      // Create a new message
+      const newMessage = await createMessage({
+        content: responseText,
+        request_id: request.id,
+        sender_id: user.id,
+        attachments: []
+      });
+      
+      // Update messages list
+      setMessages(prevMessages => [...prevMessages, newMessage]);
+      
+      // If this is the first response from admin, update request status to 'in_progress'
+      if (user.role === 'admin' || user.role === 'superadmin') {
+        if (request.status === 'pending') {
+          // Update request status
+          const updatedRequest = await updateRequest(request.id, {
+            status: 'in_progress',
+            receiver_id: user.id // Assign the admin to this request
+          });
+          
+          setRequest({
+            ...updatedRequest,
+            createdAt: new Date(updatedRequest.created_at || Date.now()),
+            updatedAt: new Date(updatedRequest.updated_at || Date.now()),
+            media: Array.isArray(updatedRequest.media) ? updatedRequest.media : []
+          });
+          
+          // Update admin profile
+          setAdminProfile(user);
+        }
       }
-    }, 1000);
+      
+      // Clear response input
+      setResponseText("");
+      
+      toast({
+        title: "Response sent",
+        description: "Your response has been added successfully.",
+      });
+    } catch (error) {
+      console.error("Error submitting response:", error);
+      toast({
+        title: "Error",
+        description: "Failed to send response. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
   
-  const handleResolveRequest = (resolved: boolean) => {
-    if (!request) return;
+  const handleResolveRequest = async (resolved: boolean) => {
+    if (!request || !user?.id) return;
     
     const newStatus: RequestStatus = resolved ? "resolved" : "escalated";
     
-    // This would be replaced with a real API call
-    setRequest({
-      ...request,
-      status: newStatus,
-      updatedAt: new Date()
-    });
-    
-    if (resolved) {
-      setRatingDialog(true);
-    } else {
+    try {
+      // Update request status
+      const updatedRequest = await updateRequest(request.id, {
+        status: newStatus
+      });
+      
+      setRequest({
+        ...updatedRequest,
+        createdAt: new Date(updatedRequest.created_at || Date.now()),
+        updatedAt: new Date(updatedRequest.updated_at || Date.now()),
+        media: Array.isArray(updatedRequest.media) ? updatedRequest.media : []
+      });
+      
+      if (resolved) {
+        setRatingDialog(true);
+      } else {
+        toast({
+          title: "Request escalated",
+          description: "This request has been escalated for further attention.",
+        });
+      }
+    } catch (error) {
+      console.error("Error updating request status:", error);
       toast({
-        title: "Request escalated",
-        description: "This request has been escalated for further attention.",
+        title: "Error",
+        description: `Failed to ${resolved ? 'resolve' : 'escalate'} request. Please try again.`,
+        variant: "destructive",
       });
     }
   };
   
-  const handleSubmitRating = () => {
-    if (rating === 0) {
+  const handleSubmitRating = async () => {
+    if (rating === 0 || !user?.id || !request?.id || !request.receiver_id) {
       toast({
         title: "Rating required",
         description: "Please select a star rating",
@@ -218,8 +209,16 @@ const RequestDetailsPage = () => {
     
     setIsRating(true);
     
-    // This would be replaced with a real API call
-    setTimeout(() => {
+    try {
+      // Create rating in database
+      await createRating({
+        request_id: request.id,
+        student_id: user.id,
+        rated_user_id: request.receiver_id,
+        stars: rating,
+        comment: ratingComment
+      });
+      
       setIsRating(false);
       setRatingDialog(false);
       
@@ -230,11 +229,22 @@ const RequestDetailsPage = () => {
       
       // Navigate back to dashboard
       navigate("/dashboard/student");
-    }, 1000);
+    } catch (error) {
+      console.error("Error submitting rating:", error);
+      setIsRating(false);
+      toast({
+        title: "Error",
+        description: "Failed to submit rating. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
   
-  const getStatusIcon = (status: RequestStatus) => {
-    switch (status) {
+  const getStatusIcon = (status: RequestStatus | string) => {
+    // Handle in_progress status from API
+    const displayStatus = status === 'in_progress' ? 'active' : status;
+    
+    switch (displayStatus) {
       case "pending":
         return <Clock className="h-5 w-5" />;
       case "active":
@@ -248,8 +258,11 @@ const RequestDetailsPage = () => {
     }
   };
   
-  const getStatusBadge = (status: RequestStatus) => {
-    switch (status) {
+  const getStatusBadge = (status: RequestStatus | string) => {
+    // Handle in_progress status from API
+    const displayStatus = status === 'in_progress' ? 'active' : status;
+    
+    switch (displayStatus) {
       case "pending":
         return <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200">Pending</Badge>;
       case "active":
@@ -267,19 +280,22 @@ const RequestDetailsPage = () => {
     if (!user || !request) return false;
     if (request.status === "resolved") return false;
     
-    if (user.role === "student") {
-      return true; // Students can always respond
+    if (user.role === "student" && request.sender_id === user.id) {
+      return true; // Original student can respond
     }
     
-    if (user.role === "admin" && request.assignedTo?.id === user.id) {
-      return true; // Assigned admin can respond
-    }
-    
-    if (user.role === "superadmin") {
-      return true; // Superadmins can always respond
+    if ((user.role === "admin" || user.role === "superadmin") && 
+        (request.receiver_id === user.id || !request.receiver_id)) {
+      return true; // Assigned admin or any admin if not assigned
     }
     
     return false;
+  };
+  
+  const getDisplayStatus = (status: RequestStatus | string) => {
+    // Convert API status to display status
+    if (status === 'in_progress') return 'Active';
+    return status.charAt(0).toUpperCase() + status.slice(1);
   };
 
   if (loading) {
@@ -325,7 +341,7 @@ const RequestDetailsPage = () => {
             <div className="flex items-center flex-wrap gap-2 mt-2">
               <div className="flex items-center gap-1">
                 {getStatusIcon(request.status)}
-                <span className="font-medium">{request.status.charAt(0).toUpperCase() + request.status.slice(1)}</span>
+                <span className="font-medium">{getDisplayStatus(request.status)}</span>
               </div>
               <Badge variant="outline">{request.department}</Badge>
               <div className="flex items-center gap-1 text-sm text-muted-foreground">
@@ -343,30 +359,32 @@ const RequestDetailsPage = () => {
           <div className="space-y-6">
             {/* Request details */}
             <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback className="bg-blue-100 text-blue-800">
-                    {request.student.name.substring(0, 2).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="font-medium">{request.student.name}</p>
-                  <p className="text-sm text-muted-foreground">{request.student.department}</p>
+              {studentProfile && (
+                <div className="flex items-center gap-2">
+                  <Avatar className="h-8 w-8">
+                    <AvatarFallback className="bg-blue-100 text-blue-800">
+                      {studentProfile.name?.substring(0, 2).toUpperCase() || 'ST'}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="font-medium">{studentProfile.name}</p>
+                    <p className="text-sm text-muted-foreground">{studentProfile.department}</p>
+                  </div>
                 </div>
-              </div>
+              )}
               <div className="bg-muted p-4 rounded-md mt-2">
                 <p>{request.content}</p>
-                {request.attachments && request.attachments.length > 0 && (
+                {request.media && request.media.length > 0 && (
                   <div className="mt-4">
                     <p className="text-sm font-medium text-muted-foreground mb-2">Attachments:</p>
                     <div className="flex flex-wrap gap-2">
-                      {request.attachments.map((attachment) => (
+                      {request.media.map((attachment, index) => (
                         <div 
-                          key={attachment.id} 
+                          key={index} 
                           className="flex items-center gap-1 border rounded-md px-2 py-1 text-sm"
                         >
                           <Paperclip className="h-3 w-3" />
-                          <span>{attachment.name}</span>
+                          <span>{attachment.name || `Attachment ${index + 1}`}</span>
                         </div>
                       ))}
                     </div>
@@ -375,83 +393,87 @@ const RequestDetailsPage = () => {
               </div>
             </div>
             
-            {request.assignedTo && (
+            {adminProfile && (
               <div className="flex items-center gap-2 border-t border-b py-4">
                 <User className="h-5 w-5 text-muted-foreground" />
                 <span className="text-muted-foreground">
                   Assigned to:{" "}
                   <span className="font-medium text-foreground">
-                    {request.assignedTo.name}
+                    {adminProfile.name}
                   </span>
-                  {" "}({request.assignedTo.department})
+                  {adminProfile.department && ` (${adminProfile.department})`}
                 </span>
               </div>
             )}
             
-            {/* Response thread */}
+            {/* Message thread */}
             <div className="space-y-4">
               <h3 className="text-lg font-medium">Conversation</h3>
               
-              {request.responses.map((response) => (
-                <div
-                  key={response.id}
-                  className={`flex gap-3 ${
-                    response.sender.role === "student"
-                      ? "justify-end"
-                      : "justify-start"
-                  }`}
-                >
-                  {response.sender.role !== "student" && (
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback>
-                        {response.sender.name.substring(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                  )}
-                  
+              {messages.length > 0 ? (
+                messages.map((message) => (
                   <div
-                    className={`space-y-1 max-w-[80%] ${
-                      response.sender.role === "student"
-                        ? "items-end"
-                        : "items-start"
+                    key={message.id}
+                    className={`flex gap-3 ${
+                      message.sender_id === user?.id
+                        ? "justify-end"
+                        : "justify-start"
                     }`}
                   >
+                    {message.sender_id !== user?.id && (
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback>
+                          {message.sender_name?.substring(0, 2).toUpperCase() || 'UN'}
+                        </AvatarFallback>
+                      </Avatar>
+                    )}
+                    
                     <div
-                      className={`rounded-lg p-3 ${
-                        response.sender.role === "student"
-                          ? "bg-srmblue text-white"
-                          : "bg-muted"
+                      className={`space-y-1 max-w-[80%] ${
+                        message.sender_id === user?.id
+                          ? "items-end"
+                          : "items-start"
                       }`}
                     >
-                      <p>{response.text}</p>
+                      <div
+                        className={`rounded-lg p-3 ${
+                          message.sender_id === user?.id
+                            ? "bg-srmblue text-white"
+                            : "bg-muted"
+                        }`}
+                      >
+                        <p>{message.content}</p>
+                      </div>
+                      <div
+                        className={`flex items-center gap-1 text-xs text-muted-foreground ${
+                          message.sender_id === user?.id ? "justify-end" : ""
+                        }`}
+                      >
+                        <span>
+                          {message.sender_id === user?.id ? "You" : message.sender_name || "User"}
+                        </span>
+                        <span>•</span>
+                        <span>
+                          {new Date(message.created_at).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </div>
                     </div>
-                    <div
-                      className={`flex items-center gap-1 text-xs text-muted-foreground ${
-                        response.sender.role === "student" ? "justify-end" : ""
-                      }`}
-                    >
-                      <span>
-                        {response.sender.role === "student" ? "You" : response.sender.name}
-                      </span>
-                      <span>•</span>
-                      <span>
-                        {new Date(response.timestamp).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
-                    </div>
+                    
+                    {message.sender_id === user?.id && (
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="bg-blue-100 text-blue-800">
+                          {user.name?.substring(0, 2).toUpperCase() || 'ME'}
+                        </AvatarFallback>
+                      </Avatar>
+                    )}
                   </div>
-                  
-                  {response.sender.role === "student" && (
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback className="bg-blue-100 text-blue-800">
-                        {response.sender.name.substring(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                  )}
-                </div>
-              ))}
+                ))
+              ) : (
+                <p className="text-muted-foreground text-sm">No messages yet. Be the first to respond!</p>
+              )}
               
               {/* Response input */}
               {request.status !== "resolved" && (
@@ -464,6 +486,7 @@ const RequestDetailsPage = () => {
                     disabled={!canSubmitResponse()}
                   />
                   <div className="flex justify-between">
+                    {/* Attachments feature - would require storage integration */}
                     <Button variant="outline" type="button">
                       <Paperclip className="mr-2 h-4 w-4" />
                       Attach
@@ -500,7 +523,9 @@ const RequestDetailsPage = () => {
             </div>
             
             {/* Resolution actions for students */}
-            {user?.role === "student" && request.status === "active" && (
+            {user?.role === "student" && 
+             user.id === request.sender_id && 
+             request.status === "in_progress" && (
               <div className="border-t pt-4 mt-6">
                 <p className="font-medium mb-3">Has your issue been resolved?</p>
                 <div className="flex gap-2">

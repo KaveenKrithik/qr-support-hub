@@ -1,34 +1,23 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useSupabaseAuth";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { CheckCircle, Clock, AlertCircle, Search, PlusCircle, Loader2, AlertTriangle, ActivitySquare } from "lucide-react";
-
-// Mock data types
-type RequestStatus = "pending" | "active" | "resolved" | "rejected";
-
-type Request = {
-  id: string;
-  title: string;
-  content: string;
-  department: string;
-  status: RequestStatus;
-  createdAt: Date;
-  updatedAt: Date;
-  response?: string;
-};
+import { fetchStudentRequests, fetchAllDepartments, createRequest } from "@/services/api";
+import { Request, RequestStatus, Department } from "@/types";
 
 const StudentDashboard = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const location = useLocation();
+  const navigate = useNavigate();
   
   // Extract department ID from URL query if it exists (from QR scan)
   const urlParams = new URLSearchParams(location.search);
@@ -39,6 +28,7 @@ const StudentDashboard = () => {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [departments, setDepartments] = useState<Department[]>([]);
   
   // New request form state
   const [isNewRequestOpen, setIsNewRequestOpen] = useState(false);
@@ -47,79 +37,56 @@ const StudentDashboard = () => {
   const [newRequestDepartment, setNewRequestDepartment] = useState(deptFromQr || "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Departments (mock data)
-  const departments = [
-    "Computer Science", 
-    "Civil Engineering",
-    "Mechanical Engineering", 
-    "Electronics",
-    "Biomedical",
-    "Chemical Engineering",
-    "Library",
-    "Placement Office"
-  ];
-
-  // Mock loading requests
+  // Fetch departments and requests
   useEffect(() => {
-    // This would be replaced with a real API call
-    setTimeout(() => {
-      const mockRequests: Request[] = [
-        {
-          id: "req1",
-          title: "Attendance correction request",
-          content: "I need to correct my attendance for CS101 on May 5th. I was present but marked absent.",
-          department: "Computer Science",
-          status: "pending",
-          createdAt: new Date(2025, 3, 8),
-          updatedAt: new Date(2025, 3, 8),
-        },
-        {
-          id: "req2",
-          title: "Issue with lab manual",
-          content: "There's a contradiction between lab manual page 25 and 32. Can someone clarify which procedure to follow?",
-          department: "Computer Science",
-          status: "active",
-          response: "I'll check the lab manual and get back to you with the correct information.",
-          createdAt: new Date(2025, 3, 6),
-          updatedAt: new Date(2025, 3, 7),
-        },
-        {
-          id: "req3",
-          title: "Request for software installation",
-          content: "I need MATLAB installed on my lab computer for my project work.",
-          department: "Computer Science",
-          status: "resolved",
-          response: "The software has been installed. Please check and let me know if you need any assistance.",
-          createdAt: new Date(2025, 3, 2),
-          updatedAt: new Date(2025, 3, 4),
-        },
-        {
-          id: "req4",
-          title: "Need assignment extension",
-          content: "Due to health issues, I need an extension for the database assignment due this Friday.",
-          department: "Computer Science",
-          status: "rejected",
-          response: "Extension cannot be granted as it would conflict with the final submission deadline. Please try to submit as much as you can.",
-          createdAt: new Date(2025, 3, 5),
-          updatedAt: new Date(2025, 3, 6),
-        },
-      ];
-      
-      setRequests(mockRequests);
-      setFilteredRequests(mockRequests);
-      setIsLoading(false);
-      
-      // If there's a department from QR code, open the new request dialog
-      if (deptFromQr) {
-        // Find the department name from the ID
-        const departmentName = departments.find(dept => dept.toLowerCase().replace(/\s+/g, '-') === deptFromQr);
-        if (departmentName) {
-          setNewRequestDepartment(departmentName);
-          setIsNewRequestOpen(true);
+    const loadData = async () => {
+      try {
+        // Fetch departments
+        const deptData = await fetchAllDepartments();
+        setDepartments(deptData);
+        
+        // If there's a department from QR code, find the matching department ID
+        if (deptFromQr) {
+          const matchingDept = deptData.find(dept => 
+            dept.name.toLowerCase().replace(/\s+/g, '-') === deptFromQr.toLowerCase()
+          );
+          
+          if (matchingDept) {
+            setNewRequestDepartment(matchingDept.id);
+            setIsNewRequestOpen(true);
+          }
         }
+        
+        // Fetch student requests if user is logged in
+        if (user?.id) {
+          const requestData = await fetchStudentRequests(user.id);
+          
+          // Convert string dates to Date objects
+          const formattedRequests = requestData.map(req => ({
+            ...req,
+            createdAt: new Date(req.created_at || Date.now()),
+            updatedAt: new Date(req.updated_at || Date.now()),
+            // Map 'in_progress' status to 'active' for display purposes
+            status: req.status === 'in_progress' ? 'active' as RequestStatus : req.status
+          }));
+          
+          setRequests(formattedRequests);
+          setFilteredRequests(formattedRequests);
+        }
+      } catch (error) {
+        console.error("Error loading dashboard data:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load dashboard data. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
       }
-    }, 1500);
-  }, [deptFromQr, departments]);
+    };
+    
+    loadData();
+  }, [user?.id, deptFromQr, toast]);
 
   // Filter requests based on search and status
   useEffect(() => {
@@ -130,18 +97,22 @@ const StudentDashboard = () => {
       filtered = filtered.filter(
         req => req.title.toLowerCase().includes(query) || 
                req.content.toLowerCase().includes(query) || 
-               req.department.toLowerCase().includes(query)
+               (req.department?.toLowerCase() || "").includes(query)
       );
     }
     
     if (filterStatus !== "all") {
-      filtered = filtered.filter(req => req.status === filterStatus);
+      filtered = filtered.filter(req => {
+        // Handle 'in_progress' status from API as 'active' for filtering
+        const displayStatus = req.status === 'in_progress' ? 'active' : req.status;
+        return displayStatus === filterStatus;
+      });
     }
     
     setFilteredRequests(filtered);
   }, [filterStatus, searchQuery, requests]);
 
-  const handleSubmitNewRequest = () => {
+  const handleSubmitNewRequest = async () => {
     if (!newRequestTitle.trim() || !newRequestContent.trim() || !newRequestDepartment) {
       toast({
         title: "Missing information",
@@ -151,56 +122,87 @@ const StudentDashboard = () => {
       return;
     }
     
+    if (!user?.id) {
+      toast({
+        title: "Authentication required",
+        description: "Please log in to submit a request",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setIsSubmitting(true);
     
-    // Mock API call - would be replaced with a real API call
-    setTimeout(() => {
-      const newRequest: Request = {
-        id: `req${requests.length + 1}`,
+    try {
+      // Create the request in the database
+      const newRequest = await createRequest({
         title: newRequestTitle,
         content: newRequestContent,
-        department: newRequestDepartment,
-        status: "pending",
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        department_id: newRequestDepartment,
+        sender_id: user.id,
+        media: [] // Empty media array by default
+      });
+      
+      // Add the new request to the UI
+      const formattedRequest = {
+        ...newRequest,
+        createdAt: new Date(newRequest.created_at || Date.now()),
+        updatedAt: new Date(newRequest.updated_at || Date.now()),
+        status: newRequest.status as RequestStatus
       };
       
-      setRequests([newRequest, ...requests]);
-      setFilteredRequests([newRequest, ...filteredRequests]);
-      
-      setIsSubmitting(false);
-      setIsNewRequestOpen(false);
-      setNewRequestTitle("");
-      setNewRequestContent("");
-      setNewRequestDepartment(deptFromQr || "");
+      setRequests(prev => [formattedRequest, ...prev]);
+      setFilteredRequests(prev => [formattedRequest, ...prev]);
       
       toast({
         title: "Request submitted",
         description: "Your support request has been submitted successfully.",
       });
-    }, 1000);
+      
+      // Reset form
+      setIsNewRequestOpen(false);
+      setNewRequestTitle("");
+      setNewRequestContent("");
+      setNewRequestDepartment("");
+    } catch (error) {
+      console.error("Error submitting request:", error);
+      toast({
+        title: "Error",
+        description: "Failed to submit request. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const getStatusBadge = (status: RequestStatus) => {
-    switch (status) {
+  const getStatusBadge = (status: RequestStatus | string) => {
+    // Convert 'in_progress' status to 'active' for display
+    const displayStatus = status === 'in_progress' ? 'active' as const : status;
+    
+    switch (displayStatus) {
       case "pending":
         return <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200">Pending</Badge>;
       case "active":
         return <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-200">Active</Badge>;
       case "resolved":
         return <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">Resolved</Badge>;
-      case "rejected":
-        return <Badge variant="outline" className="bg-red-100 text-red-800 border-red-200">Rejected</Badge>;
+      case "escalated":
+        return <Badge variant="outline" className="bg-red-100 text-red-800 border-red-200">Escalated</Badge>;
       default:
         return <Badge variant="outline">Unknown</Badge>;
     }
   };
+
+  const handleViewDetails = (requestId: string) => {
+    navigate(`/requests/${requestId}`);
+  };
   
   // Stats calculation
   const pendingCount = requests.filter(req => req.status === "pending").length;
-  const activeCount = requests.filter(req => req.status === "active").length;
+  const activeCount = requests.filter(req => req.status === "in_progress").length;
   const resolvedCount = requests.filter(req => req.status === "resolved").length;
-  const rejectedCount = requests.filter(req => req.status === "rejected").length;
+  const escalatedCount = requests.filter(req => req.status === "escalated").length;
 
   if (isLoading) {
     return (
@@ -271,11 +273,11 @@ const StudentDashboard = () => {
         
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Rejected Requests</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Escalated Requests</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-between">
-              <div className="text-2xl font-bold">{rejectedCount}</div>
+              <div className="text-2xl font-bold">{escalatedCount}</div>
               <div className="rounded-full bg-red-100 p-2 text-red-600">
                 <AlertTriangle className="h-4 w-4" />
               </div>
@@ -303,7 +305,7 @@ const StudentDashboard = () => {
               <TabsTrigger value="pending" onClick={() => setFilterStatus("pending")}>Pending</TabsTrigger>
               <TabsTrigger value="active" onClick={() => setFilterStatus("active")}>Active</TabsTrigger>
               <TabsTrigger value="resolved" onClick={() => setFilterStatus("resolved")}>Resolved</TabsTrigger>
-              <TabsTrigger value="rejected" onClick={() => setFilterStatus("rejected")}>Rejected</TabsTrigger>
+              <TabsTrigger value="escalated" onClick={() => setFilterStatus("escalated")}>Escalated</TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
@@ -331,11 +333,17 @@ const StudentDashboard = () => {
         ) : (
           <div className="space-y-4">
             {filteredRequests.map((request) => (
-              <Card key={request.id} className={`border-l-4 ${
-                request.status === "pending" ? "border-l-yellow-400" : 
-                request.status === "active" ? "border-l-blue-400" : 
-                request.status === "resolved" ? "border-l-green-400" : "border-l-red-400"
-              }`}>
+              <Card 
+                key={request.id} 
+                className={`border-l-4 ${
+                  request.status === "pending" ? "border-l-yellow-400" : 
+                  request.status === "in_progress" ? "border-l-blue-400" : 
+                  request.status === "resolved" ? "border-l-green-400" : "border-l-red-400"
+                }`}
+                onClick={() => handleViewDetails(request.id)}
+                role="button"
+                style={{ cursor: 'pointer' }}
+              >
                 <CardHeader className="pb-2">
                   <div className="flex justify-between items-start">
                     <div>
@@ -346,29 +354,14 @@ const StudentDashboard = () => {
                       </div>
                     </div>
                     <div className="text-sm text-muted-foreground">
-                      {request.updatedAt.toLocaleDateString()}
+                      {new Date(request.updated_at).toLocaleDateString()}
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground mb-1">Your Request:</p>
-                      <p>{request.content}</p>
-                    </div>
-                    
-                    {request.response && (
-                      <div className="bg-muted rounded-md p-4">
-                        <p className="text-sm font-medium text-muted-foreground mb-1">Response from Staff:</p>
-                        <p>{request.response}</p>
-                      </div>
-                    )}
-                    
-                    {request.status === "resolved" && (
-                      <Button variant="outline" className="w-full">
-                        Submit Feedback
-                      </Button>
-                    )}
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground mb-1">Your Request:</p>
+                    <p className="line-clamp-2">{request.content}</p>
                   </div>
                 </CardContent>
               </Card>
@@ -408,7 +401,7 @@ const StudentDashboard = () => {
               >
                 <option value="">Select department</option>
                 {departments.map((dept) => (
-                  <option key={dept} value={dept}>{dept}</option>
+                  <option key={dept.id} value={dept.id}>{dept.name}</option>
                 ))}
               </select>
             </div>
