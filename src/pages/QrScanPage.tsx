@@ -80,6 +80,7 @@ const QrScanPage = () => {
       handleScanComplete(decodedText);
     };
     
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const qrCodeErrorCallback = (error: any) => {
       // This callback is triggered continuously while scanning,
       // so we don't need to handle most errors

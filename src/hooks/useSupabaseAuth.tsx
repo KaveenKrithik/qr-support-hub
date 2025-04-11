@@ -301,4 +301,4 @@ export const useAuth = () => {
   return context;
 };
 
-export default 0000;
+export default useAuth;
