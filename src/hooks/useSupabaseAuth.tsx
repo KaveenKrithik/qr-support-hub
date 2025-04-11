@@ -16,6 +16,7 @@ type AuthContextType = {
   signUp: (email: string, name: string) => Promise<void>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<void>;
+  checkEmailExists: (email: string) => Promise<boolean>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -95,6 +96,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log("Auth state changed:", event);
         setSession(session);
         
         if (session?.user) {
@@ -127,6 +129,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return email.endsWith('@srmist.edu.in');
   };
 
+  const checkEmailExists = async (email: string): Promise<boolean> => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('email', email)
+        .maybeSingle();
+      
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned" error
+        console.error('Error checking email exists:', error);
+        return false;
+      }
+      
+      return !!data;
+    } catch (error) {
+      console.error('Error checking if email exists:', error);
+      return false;
+    }
+  };
+
   const signIn = async (email: string) => {
     try {
       if (!validateSrmEmail(email)) {
@@ -137,7 +159,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
-          emailRedirectTo: window.location.origin + '/dashboard'
+          emailRedirectTo: window.location.origin + '/auth-callback',
+          shouldCreateUser: true,
         }
       });
       
@@ -164,12 +187,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (!validateSrmEmail(email)) {
         throw new Error('Only SRM Institute emails (@srmist.edu.in) are allowed');
       }
+      
+      // Check if email already exists
+      const emailExists = await checkEmailExists(email);
+      if (emailExists) {
+        throw new Error('This email is already registered. Please log in instead.');
+      }
 
       // Use magic link for signups too
       const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
-          emailRedirectTo: window.location.origin + '/dashboard',
+          emailRedirectTo: window.location.origin + '/auth-callback',
           data: {
             name
           }
@@ -198,6 +227,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
+      setUser(null);
+      setSession(null);
+      
       toast({
         title: "Signed out",
         description: "You have been logged out successfully"
@@ -253,6 +285,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         signUp,
         signOut,
         updateProfile,
+        checkEmailExists,
       }}
     >
       {children}

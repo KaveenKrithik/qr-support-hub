@@ -1,7 +1,7 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useSupabaseAuth";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft } from "lucide-react";
 
 const LoginPage = () => {
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, checkEmailExists, isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   
@@ -24,6 +24,17 @@ const LoginPage = () => {
   // Signup states
   const [signupEmail, setSignupEmail] = useState("");
   const [signupName, setSignupName] = useState("");
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      if (!user.role) {
+        navigate("/onboarding");
+      } else {
+        navigate(`/dashboard/${user.role}`);
+      }
+    }
+  }, [isAuthenticated, user, navigate]);
   
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,6 +87,21 @@ const LoginPage = () => {
     setIsLoading(true);
     
     try {
+      // Check if email already exists
+      const emailExists = await checkEmailExists(signupEmail);
+      
+      if (emailExists) {
+        toast({
+          title: "Account already exists",
+          description: "This email is already registered. Please log in instead.",
+          variant: "destructive",
+        });
+        setActiveTab("login");
+        setLoginEmail(signupEmail);
+        setIsLoading(false);
+        return;
+      }
+      
       await signUp(signupEmail, signupName);
       
       toast({

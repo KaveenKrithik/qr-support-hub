@@ -1,19 +1,18 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/hooks/useSupabaseAuth"; // Updated import path
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useLocation } from "react-router-dom";
+import { useAuth } from "@/hooks/useSupabaseAuth";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, FileText, Check, X, Upload, Star } from "lucide-react";
+import { CheckCircle, Clock, AlertCircle, Search, PlusCircle, Loader2, AlertTriangle, ActivitySquare } from "lucide-react";
 
 // Mock data types
-type RequestStatus = "pending" | "active" | "resolved" | "escalated";
+type RequestStatus = "pending" | "active" | "resolved" | "rejected";
 
 type Request = {
   id: string;
@@ -21,102 +20,132 @@ type Request = {
   content: string;
   department: string;
   status: RequestStatus;
-  respondent?: {
-    id: string;
-    name: string;
-    avatar?: string;
-  };
-  response?: string;
   createdAt: Date;
   updatedAt: Date;
+  response?: string;
 };
 
 const StudentDashboard = () => {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const { toast } = useToast();
+  const location = useLocation();
+  
+  // Extract department ID from URL query if it exists (from QR scan)
+  const urlParams = new URLSearchParams(location.search);
+  const deptFromQr = urlParams.get('dept');
   
   const [requests, setRequests] = useState<Request[]>([]);
-  const [newRequest, setNewRequest] = useState({
-    title: "",
-    content: "",
-    department: "",
-  });
-  const [file, setFile] = useState<File | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeTab, setActiveTab] = useState("new-request");
-  const [departments, setDepartments] = useState([
-    { id: "1", name: "Computer Science" },
-    { id: "2", name: "Mechanical Engineering" },
-    { id: "3", name: "Civil Engineering" },
-    { id: "4", name: "Electrical Engineering" },
-    { id: "5", name: "OD Processing" },
-  ]);
+  const [filteredRequests, setFilteredRequests] = useState<Request[]>([]);
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
   
+  // New request form state
+  const [isNewRequestOpen, setIsNewRequestOpen] = useState(false);
+  const [newRequestTitle, setNewRequestTitle] = useState("");
+  const [newRequestContent, setNewRequestContent] = useState("");
+  const [newRequestDepartment, setNewRequestDepartment] = useState(deptFromQr || "");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Departments (mock data)
+  const departments = [
+    "Computer Science", 
+    "Civil Engineering",
+    "Mechanical Engineering", 
+    "Electronics",
+    "Biomedical",
+    "Chemical Engineering",
+    "Library",
+    "Placement Office"
+  ];
+
   // Mock loading requests
   useEffect(() => {
     // This would be replaced with a real API call
-    const mockRequests: Request[] = [
-      {
-        id: "req1",
-        title: "Attendance correction request",
-        content: "I need to correct my attendance for CS101 on May 5th.",
-        department: "Computer Science",
-        status: "active",
-        respondent: {
-          id: "admin1",
-          name: "Dr. John Smith",
+    setTimeout(() => {
+      const mockRequests: Request[] = [
+        {
+          id: "req1",
+          title: "Attendance correction request",
+          content: "I need to correct my attendance for CS101 on May 5th. I was present but marked absent.",
+          department: "Computer Science",
+          status: "pending",
+          createdAt: new Date(2025, 3, 8),
+          updatedAt: new Date(2025, 3, 8),
         },
-        response: "I will check the attendance records and get back to you shortly.",
-        createdAt: new Date(2025, 3, 5),
-        updatedAt: new Date(2025, 3, 6),
-      },
-      {
-        id: "req2",
-        title: "OD request for technical symposium",
-        content: "I need OD for attending the technical symposium on April 15-16.",
-        department: "OD Processing",
-        status: "pending",
-        createdAt: new Date(2025, 3, 8),
-        updatedAt: new Date(2025, 3, 8),
-      },
-      {
-        id: "req3",
-        title: "Lab manual query",
-        content: "I need clarification on experiment 5 in the CS lab manual.",
-        department: "Computer Science",
-        status: "resolved",
-        respondent: {
-          id: "admin2",
-          name: "Prof. Sarah Johnson",
+        {
+          id: "req2",
+          title: "Issue with lab manual",
+          content: "There's a contradiction between lab manual page 25 and 32. Can someone clarify which procedure to follow?",
+          department: "Computer Science",
+          status: "active",
+          response: "I'll check the lab manual and get back to you with the correct information.",
+          createdAt: new Date(2025, 3, 6),
+          updatedAt: new Date(2025, 3, 7),
         },
-        response: "The instructions for experiment 5 have been updated. Please download the latest version from the department website.",
-        createdAt: new Date(2025, 3, 1),
-        updatedAt: new Date(2025, 3, 3),
-      },
-    ];
+        {
+          id: "req3",
+          title: "Request for software installation",
+          content: "I need MATLAB installed on my lab computer for my project work.",
+          department: "Computer Science",
+          status: "resolved",
+          response: "The software has been installed. Please check and let me know if you need any assistance.",
+          createdAt: new Date(2025, 3, 2),
+          updatedAt: new Date(2025, 3, 4),
+        },
+        {
+          id: "req4",
+          title: "Need assignment extension",
+          content: "Due to health issues, I need an extension for the database assignment due this Friday.",
+          department: "Computer Science",
+          status: "rejected",
+          response: "Extension cannot be granted as it would conflict with the final submission deadline. Please try to submit as much as you can.",
+          createdAt: new Date(2025, 3, 5),
+          updatedAt: new Date(2025, 3, 6),
+        },
+      ];
+      
+      setRequests(mockRequests);
+      setFilteredRequests(mockRequests);
+      setIsLoading(false);
+      
+      // If there's a department from QR code, open the new request dialog
+      if (deptFromQr) {
+        // Find the department name from the ID
+        const departmentName = departments.find(dept => dept.toLowerCase().replace(/\s+/g, '-') === deptFromQr);
+        if (departmentName) {
+          setNewRequestDepartment(departmentName);
+          setIsNewRequestOpen(true);
+        }
+      }
+    }, 1500);
+  }, [deptFromQr, departments]);
+
+  // Filter requests based on search and status
+  useEffect(() => {
+    let filtered = [...requests];
     
-    setRequests(mockRequests);
-  }, []);
-  
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        req => req.title.toLowerCase().includes(query) || 
+               req.content.toLowerCase().includes(query) || 
+               req.department.toLowerCase().includes(query)
+      );
     }
-  };
-  
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setNewRequest((prev) => ({ ...prev, [name]: value }));
-  };
-  
-  const handleSubmitRequest = (e: React.FormEvent) => {
-    e.preventDefault();
     
-    if (!newRequest.title.trim() || !newRequest.content.trim() || !newRequest.department) {
+    if (filterStatus !== "all") {
+      filtered = filtered.filter(req => req.status === filterStatus);
+    }
+    
+    setFilteredRequests(filtered);
+  }, [filterStatus, searchQuery, requests]);
+
+  const handleSubmitNewRequest = () => {
+    if (!newRequestTitle.trim() || !newRequestContent.trim() || !newRequestDepartment) {
       toast({
-        title: "Incomplete form",
-        description: "Please fill in all required fields.",
+        title: "Missing information",
+        description: "Please fill in all fields for your request",
         variant: "destructive",
       });
       return;
@@ -124,67 +153,34 @@ const StudentDashboard = () => {
     
     setIsSubmitting(true);
     
-    // This would be replaced with a real API call
+    // Mock API call - would be replaced with a real API call
     setTimeout(() => {
-      // Create a new request object
-      const newReq: Request = {
-        id: `req${Math.random().toString(36).substring(2, 9)}`,
-        title: newRequest.title,
-        content: newRequest.content,
-        department: departments.find(d => d.id === newRequest.department)?.name || "",
+      const newRequest: Request = {
+        id: `req${requests.length + 1}`,
+        title: newRequestTitle,
+        content: newRequestContent,
+        department: newRequestDepartment,
         status: "pending",
         createdAt: new Date(),
         updatedAt: new Date(),
       };
       
-      setRequests([newReq, ...requests]);
-      
-      // Reset form
-      setNewRequest({
-        title: "",
-        content: "",
-        department: "",
-      });
-      setFile(null);
+      setRequests([newRequest, ...requests]);
+      setFilteredRequests([newRequest, ...filteredRequests]);
       
       setIsSubmitting(false);
-      setActiveTab("all-requests");
+      setIsNewRequestOpen(false);
+      setNewRequestTitle("");
+      setNewRequestContent("");
+      setNewRequestDepartment(deptFromQr || "");
       
       toast({
         title: "Request submitted",
         description: "Your support request has been submitted successfully.",
       });
-    }, 1500);
+    }, 1000);
   };
-  
-  const handleResolveRequest = (requestId: string, resolved: boolean) => {
-    // This would be replaced with a real API call
-    setRequests(requests.map(req => 
-      req.id === requestId 
-        ? { 
-            ...req, 
-            status: resolved ? "resolved" : "escalated",
-            updatedAt: new Date()
-          }
-        : req
-    ));
-    
-    toast({
-      title: resolved ? "Request resolved" : "Request escalated",
-      description: resolved 
-        ? "Thank you for your feedback! The request has been marked as resolved." 
-        : "The request has been escalated for further attention.",
-    });
-  };
-  
-  const handleRateResponse = (requestId: string, rating: number) => {
-    // This would be replaced with a real API call
-    toast({
-      title: "Thank you for your rating",
-      description: `You rated this response ${rating} stars.`,
-    });
-  };
-  
+
   const getStatusBadge = (status: RequestStatus) => {
     switch (status) {
       case "pending":
@@ -193,266 +189,255 @@ const StudentDashboard = () => {
         return <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-200">Active</Badge>;
       case "resolved":
         return <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">Resolved</Badge>;
-      case "escalated":
-        return <Badge variant="outline" className="bg-red-100 text-red-800 border-red-200">Escalated</Badge>;
+      case "rejected":
+        return <Badge variant="outline" className="bg-red-100 text-red-800 border-red-200">Rejected</Badge>;
       default:
         return <Badge variant="outline">Unknown</Badge>;
     }
   };
+  
+  // Stats calculation
+  const pendingCount = requests.filter(req => req.status === "pending").length;
+  const activeCount = requests.filter(req => req.status === "active").length;
+  const resolvedCount = requests.filter(req => req.status === "resolved").length;
+  const rejectedCount = requests.filter(req => req.status === "rejected").length;
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <p className="mt-4 text-muted-foreground">Loading your requests...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-        <h1 className="text-3xl font-bold">Student Dashboard</h1>
-        <Button onClick={() => navigate("/qr")}>
-          Scan QR Code
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold">Student Dashboard</h1>
+          <p className="text-muted-foreground mt-1">
+            Track and submit support requests
+          </p>
+        </div>
+        <Button onClick={() => setIsNewRequestOpen(true)} className="self-start">
+          <PlusCircle className="mr-2 h-4 w-4" />
+          New Request
         </Button>
       </div>
       
-      <div className="grid gap-6">
+      <div className="grid gap-4 md:grid-cols-4">
         <Card>
-          <CardHeader>
-            <CardTitle>Welcome, {user?.name || "Student"}!</CardTitle>
-            <CardDescription>
-              Submit and track your support requests here. You can create new requests, view responses, and mark requests as resolved.
-            </CardDescription>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Pending Requests</CardTitle>
           </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div className="text-2xl font-bold">{pendingCount}</div>
+              <div className="rounded-full bg-yellow-100 p-2 text-yellow-600">
+                <Clock className="h-4 w-4" />
+              </div>
+            </div>
+          </CardContent>
         </Card>
         
-        <Tabs defaultValue="new-request" value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="new-request">New Request</TabsTrigger>
-            <TabsTrigger value="all-requests">
-              My Requests
-              {requests.length > 0 && (
-                <Badge className="ml-2 bg-primary" variant="secondary">
-                  {requests.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="new-request">
-            <Card>
-              <CardHeader>
-                <CardTitle>Create Support Request</CardTitle>
-                <CardDescription>
-                  Fill in the details of your request. Be as specific as possible to get a quicker response.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleSubmitRequest} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="title">Request Title</Label>
-                    <Input
-                      id="title"
-                      name="title"
-                      placeholder="Brief title for your request"
-                      value={newRequest.title}
-                      onChange={handleInputChange}
-                      required
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="department">Department</Label>
-                    <select
-                      id="department"
-                      name="department"
-                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                      value={newRequest.department}
-                      onChange={handleInputChange}
-                      required
-                    >
-                      <option value="">Select Department</option>
-                      {departments.map((dept) => (
-                        <option key={dept.id} value={dept.id}>
-                          {dept.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="content">Request Details</Label>
-                    <Textarea
-                      id="content"
-                      name="content"
-                      placeholder="Describe your request in detail..."
-                      value={newRequest.content}
-                      onChange={handleInputChange}
-                      className="min-h-32"
-                      required
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="attachment">Attachment (optional)</Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        id="attachment"
-                        type="file"
-                        onChange={handleFileChange}
-                        className="max-w-sm"
-                      />
-                      {file && (
-                        <Badge variant="outline" className="ml-2">
-                          {file.name}
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      You can attach relevant files (images, PDFs, documents)
-                    </p>
-                  </div>
-                  
-                  <Button type="submit" disabled={isSubmitting} className="w-full">
-                    {isSubmitting ? (
-                      <>
-                        <svg
-                          className="mr-2 h-4 w-4 animate-spin"
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                        </svg>
-                        Submitting...
-                      </>
-                    ) : (
-                      "Submit Request"
-                    )}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="all-requests">
-            <Card>
-              <CardHeader>
-                <CardTitle>My Requests</CardTitle>
-                <CardDescription>
-                  View and manage all your submitted support requests
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {requests.length === 0 ? (
-                  <div className="text-center py-12">
-                    <FileText className="mx-auto h-12 w-12 text-muted-foreground opacity-50" />
-                    <h3 className="mt-4 text-lg font-medium">No requests yet</h3>
-                    <p className="mt-2 text-muted-foreground">
-                      You haven't submitted any support requests yet.
-                    </p>
-                    <Button className="mt-4" onClick={() => setActiveTab("new-request")}>
-                      Create a Request
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {requests.map((request) => (
-                      <Card key={request.id}>
-                        <CardHeader className="pb-2">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <CardTitle className="text-xl">{request.title}</CardTitle>
-                              <div className="flex items-center gap-2 mt-1">
-                                <Badge variant="outline">{request.department}</Badge>
-                                {getStatusBadge(request.status)}
-                              </div>
-                            </div>
-                            <div className="flex items-center text-sm text-muted-foreground">
-                              <Clock className="mr-1 h-4 w-4" />
-                              {request.createdAt.toLocaleDateString()}
-                            </div>
-                          </div>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="space-y-4">
-                            <div>
-                              <p className="text-sm font-medium text-muted-foreground mb-1">Your Request:</p>
-                              <p>{request.content}</p>
-                            </div>
-                            
-                            {request.response && (
-                              <div className="bg-muted rounded-md p-4">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <Avatar className="h-6 w-6">
-                                    <AvatarFallback className="text-xs">
-                                      {request.respondent?.name?.substring(0, 2).toUpperCase() || "??"}
-                                    </AvatarFallback>
-                                  </Avatar>
-                                  <span className="font-medium text-sm">
-                                    {request.respondent?.name || "Staff"}
-                                  </span>
-                                </div>
-                                <p className="text-sm">{request.response}</p>
-                              </div>
-                            )}
-                          </div>
-                        </CardContent>
-                        <CardFooter className="flex flex-col items-stretch gap-4">
-                          {request.status === "active" && (
-                            <div className="w-full">
-                              <p className="text-sm font-medium mb-2">Is your issue resolved?</p>
-                              <div className="flex gap-2">
-                                <Button
-                                  variant="outline"
-                                  className="flex-1 bg-green-100 text-green-800 border-green-200 hover:bg-green-200 hover:text-green-900"
-                                  onClick={() => handleResolveRequest(request.id, true)}
-                                >
-                                  <Check className="mr-2 h-4 w-4" /> Yes, Resolved
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  className="flex-1 bg-red-100 text-red-800 border-red-200 hover:bg-red-200 hover:text-red-900"
-                                  onClick={() => handleResolveRequest(request.id, false)}
-                                >
-                                  <X className="mr-2 h-4 w-4" /> Not Resolved
-                                </Button>
-                              </div>
-                            </div>
-                          )}
-                          
-                          {request.status === "resolved" && request.respondent && (
-                            <div className="w-full">
-                              <p className="text-sm font-medium mb-2">Rate the response:</p>
-                              <div className="flex gap-1">
-                                {[1, 2, 3, 4, 5].map((rating) => (
-                                  <Button
-                                    key={rating}
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => handleRateResponse(request.id, rating)}
-                                  >
-                                    <Star
-                                      className={`h-5 w-5 ${
-                                        rating <= 3 ? "text-srmaccent" : "text-srmaccent"
-                                      }`}
-                                      fill={rating <= 3 ? "none" : "#FF9F1C"}
-                                    />
-                                    <span className="sr-only">{rating} stars</span>
-                                  </Button>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </CardFooter>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Active Requests</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div className="text-2xl font-bold">{activeCount}</div>
+              <div className="rounded-full bg-blue-100 p-2 text-blue-600">
+                <ActivitySquare className="h-4 w-4" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Resolved Requests</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div className="text-2xl font-bold">{resolvedCount}</div>
+              <div className="rounded-full bg-green-100 p-2 text-green-600">
+                <CheckCircle className="h-4 w-4" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Rejected Requests</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div className="text-2xl font-bold">{rejectedCount}</div>
+              <div className="rounded-full bg-red-100 p-2 text-red-600">
+                <AlertTriangle className="h-4 w-4" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
+      
+      <div className="space-y-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div className="relative w-full md:w-64">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="Search requests..."
+              className="w-full pl-9"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          
+          <Tabs defaultValue="all" className="w-full md:w-auto">
+            <TabsList>
+              <TabsTrigger value="all" onClick={() => setFilterStatus("all")}>All</TabsTrigger>
+              <TabsTrigger value="pending" onClick={() => setFilterStatus("pending")}>Pending</TabsTrigger>
+              <TabsTrigger value="active" onClick={() => setFilterStatus("active")}>Active</TabsTrigger>
+              <TabsTrigger value="resolved" onClick={() => setFilterStatus("resolved")}>Resolved</TabsTrigger>
+              <TabsTrigger value="rejected" onClick={() => setFilterStatus("rejected")}>Rejected</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+        
+        {filteredRequests.length === 0 ? (
+          <Card>
+            <CardContent className="text-center py-12">
+              <AlertCircle className="mx-auto h-12 w-12 text-muted-foreground opacity-50" />
+              <h3 className="mt-4 text-lg font-medium">No requests found</h3>
+              <p className="mt-2 text-muted-foreground">
+                {searchQuery 
+                  ? "Try adjusting your search query" 
+                  : filterStatus !== "all" 
+                    ? `You don't have any ${filterStatus} requests` 
+                    : "You haven't submitted any requests yet"}
+              </p>
+              {!searchQuery && filterStatus === "all" && (
+                <Button onClick={() => setIsNewRequestOpen(true)} className="mt-4">
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  Submit a request
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {filteredRequests.map((request) => (
+              <Card key={request.id} className={`border-l-4 ${
+                request.status === "pending" ? "border-l-yellow-400" : 
+                request.status === "active" ? "border-l-blue-400" : 
+                request.status === "resolved" ? "border-l-green-400" : "border-l-red-400"
+              }`}>
+                <CardHeader className="pb-2">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <CardTitle className="text-xl">{request.title}</CardTitle>
+                      <div className="flex items-center gap-2 mt-1">
+                        {getStatusBadge(request.status)}
+                        <Badge variant="outline">{request.department}</Badge>
+                      </div>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {request.updatedAt.toLocaleDateString()}
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground mb-1">Your Request:</p>
+                      <p>{request.content}</p>
+                    </div>
+                    
+                    {request.response && (
+                      <div className="bg-muted rounded-md p-4">
+                        <p className="text-sm font-medium text-muted-foreground mb-1">Response from Staff:</p>
+                        <p>{request.response}</p>
+                      </div>
+                    )}
+                    
+                    {request.status === "resolved" && (
+                      <Button variant="outline" className="w-full">
+                        Submit Feedback
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+      
+      {/* New Request Dialog */}
+      <Dialog open={isNewRequestOpen} onOpenChange={setIsNewRequestOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Submit a new support request</DialogTitle>
+            <DialogDescription>
+              Fill in the details below to submit your request. You'll be notified when you receive a response.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label htmlFor="title" className="text-sm font-medium">Request Title</label>
+              <Input 
+                id="title" 
+                placeholder="Brief description of your issue" 
+                value={newRequestTitle}
+                onChange={(e) => setNewRequestTitle(e.target.value)}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <label htmlFor="department" className="text-sm font-medium">Department</label>
+              <select 
+                id="department"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                value={newRequestDepartment}
+                onChange={(e) => setNewRequestDepartment(e.target.value)}
+              >
+                <option value="">Select department</option>
+                {departments.map((dept) => (
+                  <option key={dept} value={dept}>{dept}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div className="space-y-2">
+              <label htmlFor="content" className="text-sm font-medium">Request Details</label>
+              <Textarea 
+                id="content" 
+                placeholder="Please provide a detailed description of your issue or request" 
+                className="min-h-[150px]"
+                value={newRequestContent}
+                onChange={(e) => setNewRequestContent(e.target.value)}
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsNewRequestOpen(false)}>Cancel</Button>
+            <Button onClick={handleSubmitNewRequest} disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Submitting...
+                </>
+              ) : 'Submit Request'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

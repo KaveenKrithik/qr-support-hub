@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from "@/hooks/useSupabaseAuth"; // Updated import path
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,13 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [notifications, setNotifications] = useState<{ id: string; text: string }[]>([]);
 
+  // Handle navigation to have proper history stack
+  const handleNavigate = (path: string) => {
+    if (location.pathname !== path) {
+      navigate(path);
+    }
+  };
+
   // Mock notifications
   useEffect(() => {
     if (user?.role === "admin" || user?.role === "superadmin") {
@@ -54,21 +61,21 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     if (user?.role === "student") {
       return [
         { name: "Dashboard", href: `${basePath}/student`, icon: <Home className="h-5 w-5" /> },
-        { name: "My Requests", href: "/requests", icon: <MessageCircle className="h-5 w-5" /> },
+        { name: "My Requests", href: `${basePath}/student`, icon: <MessageCircle className="h-5 w-5" /> },
       ];
     }
     
     if (user?.role === "admin") {
       return [
         { name: "Dashboard", href: `${basePath}/admin`, icon: <Home className="h-5 w-5" /> },
-        { name: "Requests", href: "/requests", icon: <MessageCircle className="h-5 w-5" /> },
+        { name: "Requests", href: `${basePath}/admin`, icon: <MessageCircle className="h-5 w-5" /> },
       ];
     }
     
     if (user?.role === "superadmin") {
       return [
         { name: "Dashboard", href: `${basePath}/superadmin`, icon: <Home className="h-5 w-5" /> },
-        { name: "Requests", href: "/requests", icon: <MessageCircle className="h-5 w-5" /> },
+        { name: "Requests", href: `${basePath}/superadmin`, icon: <MessageCircle className="h-5 w-5" /> },
       ];
     }
     
@@ -100,7 +107,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     <div className="flex min-h-screen flex-col">
       <header className="border-b bg-background">
         <div className="container flex h-16 items-center justify-between">
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate("/")}>
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => handleNavigate("/")}>
             <div className="rounded-full bg-srmblue p-1">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
                 <path d="M3 9h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9Z" />
@@ -112,18 +119,18 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           
           <nav className="hidden md:flex items-center space-x-6">
             {navLinks.map((link) => (
-              <Link
+              <div
                 key={link.name}
-                to={link.href}
-                className={`flex items-center gap-1 text-sm font-medium transition-colors ${
+                className={`flex items-center gap-1 text-sm font-medium transition-colors cursor-pointer ${
                   location.pathname === link.href
                     ? "text-foreground"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
+                onClick={() => handleNavigate(link.href)}
               >
                 {link.icon}
                 {link.name}
-              </Link>
+              </div>
             ))}
           </nav>
           
@@ -174,7 +181,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate("/profile")} className="cursor-pointer">
+                <DropdownMenuItem onClick={() => handleNavigate("/dashboard/profile")} className="cursor-pointer">
                   <User className="mr-2 h-4 w-4" /> Profile
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
@@ -219,24 +226,28 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           </div>
           <nav className="container py-8 grid gap-4">
             {navLinks.map((link) => (
-              <Link
+              <div
                 key={link.name}
-                to={link.href}
-                className="flex items-center gap-2 text-lg font-medium py-2"
-                onClick={toggleMobileMenu}
+                className="flex items-center gap-2 text-lg font-medium py-2 cursor-pointer"
+                onClick={() => {
+                  handleNavigate(link.href);
+                  toggleMobileMenu();
+                }}
               >
                 {link.icon}
                 {link.name}
-              </Link>
+              </div>
             ))}
-            <Link
-              to="/profile"
-              className="flex items-center gap-2 text-lg font-medium py-2"
-              onClick={toggleMobileMenu}
+            <div
+              className="flex items-center gap-2 text-lg font-medium py-2 cursor-pointer"
+              onClick={() => {
+                handleNavigate("/dashboard/profile");
+                toggleMobileMenu();
+              }}
             >
               <User className="h-5 w-5" />
               Profile
-            </Link>
+            </div>
             <button
               className="flex items-center gap-2 text-lg font-medium py-2 text-destructive"
               onClick={handleSignOut}

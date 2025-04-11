@@ -1,7 +1,6 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/hooks/useSupabaseAuth";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { QrCode, ArrowLeft } from "lucide-react";
@@ -66,17 +65,22 @@ const QrScanPage = () => {
         });
         navigate("/login");
       } else if (user?.role === "student") {
+        // For students, pass the department ID to the student dashboard as a query parameter
         toast({
           title: "QR code scanned",
           description: `Ready to submit a request to ${department?.name || "department"}`,
         });
         navigate(`/dashboard/student?dept=${departmentId}`);
-      } else {
+      } else if (user?.role) {
+        // For admins and superadmins, redirect to their dashboard
         toast({
           title: "QR code scanned",
           description: "Admins and superadmins cannot submit requests",
         });
-        navigate(`/dashboard/${user?.role}`);
+        navigate(`/dashboard/${user.role}`);
+      } else {
+        // Fallback for unknown roles
+        navigate("/dashboard");
       }
     }, 2000);
   };
