@@ -384,7 +384,7 @@ const StudentDashboard = () => {
                       </div>
                     </div>
                     <div className="text-sm text-muted-foreground">
-                      {new Date(request.updated_at).toLocaleDateString()}
+                      {new Date(request.created_at).toLocaleDateString()}
                     </div>
                   </div>
                 </CardHeader>

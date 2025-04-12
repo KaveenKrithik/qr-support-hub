@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/hooks/useSupabaseAuth"; // Changed from "@/context/AuthContext"
+import { useAuth } from "@/hooks/useSupabaseAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { PlusCircle, Loader2 } from "lucide-react";
-import { Profile } from "@/types"; // Import the Profile type
+import { Profile, Department } from "@/types";
+import { fetchAllDepartments, createDepartment as apiCreateDepartment } from "@/services/api";
 
 // Define UserProfile type to match Profile type but with nullable role
 type UserProfile = {
@@ -18,17 +19,13 @@ type UserProfile = {
   role: "student" | "admin" | "superadmin" | null;
   name: string | null;
   department: string | null;
+  department_id?: string | null; // Added to store the department ID
   duties?: string | null;
   qualifications?: string | null;
   created_at?: string;
 };
 
 type Step = "role" | "details";
-
-type Department = {
-  id: string;
-  name: string;
-};
 
 const OnboardingPage = () => {
   const { user, updateProfile } = useAuth();
@@ -42,17 +39,38 @@ const OnboardingPage = () => {
   const [duties, setDuties] = useState("");
   const [qualifications, setQualifications] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingDepartments, setIsLoadingDepartments] = useState(true);
   const [isCreatingDepartment, setIsCreatingDepartment] = useState(false);
   const [newDepartment, setNewDepartment] = useState("");
-  
-  // Mock departments
-  const [departments, setDepartments] = useState<Department[]>([
-    { id: "1", name: "Computer Science" },
-    { id: "2", name: "Mechanical Engineering" },
-    { id: "3", name: "Civil Engineering" },
-    { id: "4", name: "Electrical Engineering" },
-    { id: "5", name: "OD Processing" },
-  ]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+
+  // Fetch departments from the database
+  useEffect(() => {
+    const getDepartments = async () => {
+      try {
+        setIsLoadingDepartments(true);
+        const deptData = await fetchAllDepartments();
+        console.log("Departments fetched:", deptData);
+        
+        if (deptData && deptData.length > 0) {
+          setDepartments(deptData);
+        } else {
+          console.log("No departments found in database");
+        }
+      } catch (error) {
+        console.error("Error loading departments:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load departments. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoadingDepartments(false);
+      }
+    };
+    
+    getDepartments();
+  }, [toast]);
 
   const handleRoleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,7 +87,7 @@ const OnboardingPage = () => {
     setStep("details");
   };
 
-  const handleCreateDepartment = () => {
+  const handleCreateDepartment = async () => {
     if (!newDepartment.trim()) {
       toast({
         title: "Department name required",
@@ -79,19 +97,34 @@ const OnboardingPage = () => {
       return;
     }
     
-    // Generate a random ID for the new department
-    const newDeptId = `dept_${Math.random().toString(36).substring(2, 9)}`;
-    const newDept = { id: newDeptId, name: newDepartment.trim() };
-    
-    setDepartments([...departments, newDept]);
-    setDepartment(newDept.id);
-    setNewDepartment("");
-    setIsCreatingDepartment(false);
-    
-    toast({
-      title: "Department created",
-      description: `${newDepartment} has been added to departments`,
-    });
+    try {
+      setIsLoading(true);
+      
+      // Create department in the database
+      const createdDept = await apiCreateDepartment({
+        name: newDepartment.trim(),
+        created_by: user?.id
+      });
+      
+      setDepartments(prev => [...prev, createdDept]);
+      setDepartment(createdDept.id);
+      setNewDepartment("");
+      setIsCreatingDepartment(false);
+      
+      toast({
+        title: "Department created",
+        description: `${newDepartment} has been added to departments`,
+      });
+    } catch (error) {
+      console.error("Error creating department:", error);
+      toast({
+        title: "Error",
+        description: "Failed to create department. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleDetailsSubmit = async (e: React.FormEvent) => {
@@ -136,12 +169,13 @@ const OnboardingPage = () => {
     setIsLoading(true);
     
     try {
-      const selectedDepartmentName = departments.find(d => d.id === department)?.name;
+      const selectedDepartment = departments.find(d => d.id === department);
       
       await updateProfile({
         role,
         name,
-        department: selectedDepartmentName || department,
+        department_id: department, // Store the department ID directly in the profile
+        department: selectedDepartment?.name,
         duties: role === "student" ? null : duties,
         qualifications: role === "student" ? null : qualifications,
       });
@@ -230,20 +264,27 @@ const OnboardingPage = () => {
             {role === "student" && (
               <div className="space-y-2">
                 <Label htmlFor="department">Department</Label>
-                <select
-                  id="department"
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                  value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
-                  required
-                >
-                  <option value="">Select Department</option>
-                  {departments.map((dept) => (
-                    <option key={dept.id} value={dept.id}>
-                      {dept.name}
-                    </option>
-                  ))}
-                </select>
+                {isLoadingDepartments ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    <span className="ml-2 text-sm text-muted-foreground">Loading departments...</span>
+                  </div>
+                ) : (
+                  <select
+                    id="department"
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    value={department}
+                    onChange={(e) => setDepartment(e.target.value)}
+                    required
+                  >
+                    <option value="">Select Department</option>
+                    {departments.map((dept) => (
+                      <option key={dept.id} value={dept.id}>
+                        {dept.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
             )}
             
@@ -253,28 +294,37 @@ const OnboardingPage = () => {
                   <div className="space-y-2">
                     <Label htmlFor="department">Department</Label>
                     <div className="flex gap-2">
-                      <select
-                        id="department"
-                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                        value={department}
-                        onChange={(e) => setDepartment(e.target.value)}
-                        required
-                      >
-                        <option value="">Select Department</option>
-                        {departments.map((dept) => (
-                          <option key={dept.id} value={dept.id}>
-                            {dept.name}
-                          </option>
-                        ))}
-                      </select>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => setIsCreatingDepartment(true)}
-                      >
-                        <PlusCircle className="h-4 w-4 mr-1" />
-                        New
-                      </Button>
+                      {isLoadingDepartments ? (
+                        <div className="flex items-center justify-center py-4 w-full">
+                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                          <span className="ml-2 text-sm text-muted-foreground">Loading departments...</span>
+                        </div>
+                      ) : (
+                        <>
+                          <select
+                            id="department"
+                            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                            value={department}
+                            onChange={(e) => setDepartment(e.target.value)}
+                            required={role !== "superadmin"}
+                          >
+                            <option value="">Select Department</option>
+                            {departments.map((dept) => (
+                              <option key={dept.id} value={dept.id}>
+                                {dept.name}
+                              </option>
+                            ))}
+                          </select>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setIsCreatingDepartment(true)}
+                          >
+                            <PlusCircle className="h-4 w-4 mr-1" />
+                            New
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -290,13 +340,19 @@ const OnboardingPage = () => {
                       <Button
                         type="button"
                         onClick={handleCreateDepartment}
+                        disabled={isLoading}
                       >
-                        Create
+                        {isLoading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          "Create"
+                        )}
                       </Button>
                       <Button
                         type="button"
                         variant="ghost"
                         onClick={() => setIsCreatingDepartment(false)}
+                        disabled={isLoading}
                       >
                         Cancel
                       </Button>
