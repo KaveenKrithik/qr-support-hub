@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { CheckCircle, Clock, AlertCircle, Search, PlusCircle, Loader2, AlertTriangle, ActivitySquare } from "lucide-react";
-import { fetchStudentRequests, fetchAllDepartments, createRequest } from "@/services/api";
+import { fetchStudentRequests, fetchAllDepartments, createRequest, createDepartment } from "@/services/api";
 import { Request, RequestStatus, Department } from "@/types";
 
 const StudentDashboard = () => {
@@ -42,8 +42,38 @@ const StudentDashboard = () => {
     const loadData = async () => {
       try {
         // Fetch departments
+        console.log("Fetching departments...");
         const deptData = await fetchAllDepartments();
-        setDepartments(deptData);
+        console.log("Departments fetched:", deptData);
+        
+        // If no departments exist, create default ones
+        if (deptData.length === 0) {
+          console.log("No departments found, creating defaults...");
+          const defaultDepartments = [
+            { name: "Computer Science" },
+            { name: "Mechanical Engineering" },
+            { name: "Electrical Engineering" },
+            { name: "Civil Engineering" },
+            { name: "OD Processing" }
+          ];
+          
+          const createdDepartments = await Promise.all(
+            defaultDepartments.map(async (dept) => {
+              try {
+                return await createDepartment(dept);
+              } catch (error) {
+                console.error(`Error creating department ${dept.name}:`, error);
+                return null;
+              }
+            })
+          );
+          
+          const newDepts = createdDepartments.filter(Boolean) as Department[];
+          console.log("Created departments:", newDepts);
+          setDepartments(newDepts);
+        } else {
+          setDepartments(deptData);
+        }
         
         // If there's a department from QR code, find the matching department ID
         if (deptFromQr) {
